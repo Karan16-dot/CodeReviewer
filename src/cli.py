@@ -18,10 +18,12 @@ class InteractiveCLI:
     """Manages the console interactive chat loop for the AI Coding Agent."""
 
     def __init__(self):
+        from safety import SecurityPolicy
         self.messages = []
         self.client = None
         self.memory = ConversationMemory()
         self.memory_index = None
+        self.policy = SecurityPolicy()
         self.file_reader = FileReader()
         self.file_editor = FileEditor()
         self.tool_registry = tool_registry
@@ -809,7 +811,16 @@ class InteractiveCLI:
                                 else:
                                     args_formatted = ", ".join(f"{k}={repr(v)}" for k, v in args.items())
                                     print(f"\n{Fore.YELLOW}{Style.BRIGHT}⚙ Tool Run: {Fore.CYAN}{name}({args_formatted})")
-                                    tool_result = self.tool_registry.execute(name, args)
+                                    if self.policy.require_user_confirmation:
+                                        print(f"{Fore.YELLOW}[Security policy requires confirmation]")
+                                        confirm = input(f"{Fore.YELLOW}Allow agent tool call '{name}'? (y/N): ").strip().lower()
+                                        if confirm not in ["y", "yes"]:
+                                            tool_result = "Security Error: Tool execution rejected by the user."
+                                            print(f"{Fore.RED}Tool call rejected.")
+                                        else:
+                                            tool_result = self.tool_registry.execute(name, args)
+                                    else:
+                                        tool_result = self.tool_registry.execute(name, args)
                                     result_preview = tool_result[:250] + "..." if len(tool_result) > 250 else tool_result
                                     print(f"{Fore.GREEN}Result Preview:\n{Fore.WHITE}{result_preview}")
 
@@ -908,7 +919,16 @@ class InteractiveCLI:
                             args_formatted = ", ".join(f"{k}={repr(v)}" for k, v in args.items())
                             print(f"\n{Fore.YELLOW}{Style.BRIGHT}⚙ Tool Run: {Fore.CYAN}{name}({args_formatted})")
 
-                            tool_result = self.tool_registry.execute(name, args)
+                            if self.policy.require_user_confirmation:
+                                print(f"{Fore.YELLOW}[Security policy requires confirmation]")
+                                confirm = input(f"{Fore.YELLOW}Allow agent tool call '{name}'? (y/N): ").strip().lower()
+                                if confirm not in ["y", "yes"]:
+                                    tool_result = "Security Error: Tool execution rejected by the user."
+                                    print(f"{Fore.RED}Tool call rejected.")
+                                else:
+                                    tool_result = self.tool_registry.execute(name, args)
+                            else:
+                                tool_result = self.tool_registry.execute(name, args)
                             result_preview = tool_result[:250] + "..." if len(tool_result) > 250 else tool_result
                             print(f"{Fore.GREEN}Result Preview:\n{Fore.WHITE}{result_preview}")
 

@@ -173,11 +173,17 @@ The Memory Index features a hybrid vector database layer:
 
 ---
 
-## Security Policies
+## Security Policies & Safety Constraints (Phase 14+)
 
-To protect the host environment during automated command execution, all commands processed by the agent pass through the `CommandRunner` sanitizer:
-- **Blocked Commands**: Destructive binaries are explicitly blocked from executing (includes `del`, `rmdir`, `mkfs`, `dd`, `shutdown`, `reboot`, `format`, `chown`, `chmod`). Attempting to run them raises a `SecurityError`.
-- **Blocked Parameters**: Dangerous command flag patterns, such as root recursive deletions (`rm -rf /`), are identified and blocked immediately.
+To protect the host developer environment, all file writes and command executions pass through the `SecurityPolicy` validator:
+1. **Configurable Policy File (`config/security_policy.json`)**:
+   - `allowed_commands`: Whitelists permitted command binaries. If empty, all binaries except blacklisted ones are allowed.
+   - `blocked_commands`: Blacklists unsafe binaries (e.g., `del`, `rmdir`, `mkfs`, `dd`, `shutdown`, `reboot`).
+   - `require_user_confirmation`: If set to `true`, the CLI intercepts all agent tool executions (e.g. file writing, running tests) and prompts the user for confirmation: *"Allow agent tool call '<name>'? (y/N)"*.
+   - `max_file_size_bytes`: Rejects modifications to files exceeding the size threshold (defaults to 1MB).
+   - `blocked_file_extensions`: Rejects writing files with denied extensions (e.g., `.exe`, `.bin`, `.sh`, `.bat`, `.dll`).
+2. **Path Traversal Constraints**: Strict containment check resolving all paths relative to the active workspace root using `resolved_path.relative_to(workspace_root)`. Any edits targeted outside the workspace are blocked.
+3. **Recursive Deletion Check**: Blocks dangerous parameters such as root recursive folder deletions (`rm -rf /`).
 
 Additionally, command execution prioritizes the local project virtual environment's bin folder (e.g. `venv/Scripts` or `venv/bin`) within the PATH, ensuring local developer CLI binaries execute cleanly.
 

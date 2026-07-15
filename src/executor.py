@@ -4,49 +4,25 @@ import os
 from pathlib import Path
 from typing import Generator, List, Tuple
 
-class SecurityError(Exception):
-    """Raised when a command violates execution security policies."""
-    pass
+from safety import SecurityPolicy, SecurityError
 
 class CommandRunner:
     """Handles command execution with security restrictions and real-time streaming output."""
 
-    # Unsafe command keywords/sub-commands we want to restrict for safety
-    BLOCKED_COMMANDS = {
-        "rmdir", "del", "mkfs", "dd", "shutdown", "reboot",
-        "format", "chown", "chmod"
-    }
-
     def __init__(self, workspace_root: str = "."):
         self.workspace_root = Path(workspace_root).resolve()
+        self.policy = SecurityPolicy(workspace_root=str(self.workspace_root))
 
     def sanitize_command(self, command: str) -> List[str]:
         """
         Parses and verifies command security safety.
         Raises SecurityError if command tries to execute blocked binaries or dangerous parameters.
         """
+        self.policy.validate_command(command)
         try:
-            parts = shlex.split(command)
+            return shlex.split(command)
         except ValueError:
-            parts = command.split()
-
-        if not parts:
-            raise SecurityError("Command is empty.")
-
-        # Check blocked executable binary names (e.g. rmdir)
-        binary = Path(parts[0]).name.lower()
-        if binary.endswith((".exe", ".bat", ".cmd", ".ps1")):
-            binary = binary.rsplit(".", 1)[0]
-
-        if binary in self.BLOCKED_COMMANDS:
-            raise SecurityError(f"Security Policy: Execution of '{parts[0]}' is blocked.")
-
-        # Specific dangerous argument patterns check (like rm -rf /)
-        cmd_lower = command.lower()
-        if "rm " in cmd_lower and "-rf" in cmd_lower and "/" in cmd_lower:
-            raise SecurityError("Security Policy: Blocked recursive root deletion.")
-
-        return parts
+            return command.split()
 
     def run_streaming(self, command: str, timeout: float = 60.0) -> Generator[str, None, None]:
         """

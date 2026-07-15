@@ -3,15 +3,16 @@ import hashlib
 import difflib
 from pathlib import Path
 from typing import Dict, Optional
+from safety import SecurityPolicy, SecurityError
 
 class FileEditor:
     """Manages file edits with automatic backups, diffing, search-and-replace patches, and undos."""
 
-    def __init__(self, backup_dir: str = ".backup"):
+    def __init__(self, backup_dir: str = ".backup", workspace_root: str = "."):
         self.backup_dir = Path(backup_dir).resolve()
         self.backup_dir.mkdir(parents=True, exist_ok=True)
-        # Track active backups in memory to allow session rollbacks: file_path -> backup_path
         self.backups: Dict[str, Optional[Path]] = {}
+        self.policy = SecurityPolicy(workspace_root=workspace_root)
 
     def get_backup_path(self, file_path: Path) -> Path:
         """Generates a unique backup filename using the target path's MD5 hash."""
@@ -35,6 +36,15 @@ class FileEditor:
     def write(self, file_path: Path, content: str) -> None:
         """Safely writes content to a file, making a backup if it exists beforehand."""
         file_path = Path(file_path).resolve()
+
+        # Enforce safety constraints
+        self.policy.validate_file_modification(file_path)
+        content_size = len(content.encode("utf-8"))
+        if content_size > self.policy.max_file_size_bytes:
+            raise SecurityError(
+                f"Security Policy: Proposed write content size ({content_size} bytes) exceeds limit "
+                f"({self.policy.max_file_size_bytes} bytes)."
+            )
 
         if file_path.exists():
             self.backup(file_path)
@@ -82,6 +92,10 @@ class FileEditor:
             ValueError: If search block is not found or matches multiple segments.
         """
         file_path = Path(file_path).resolve()
+
+        # Enforce safety constraints
+        self.policy.validate_file_modification(file_path)
+
         if not file_path.exists():
             raise FileNotFoundError(f"File not found for editing: {file_path}")
 

@@ -1,0 +1,12 @@
+{
+    "allowed_commands": [],
+    "blocked_commands": [
+        "del", "rmdir", "mkfs", "dd", "shutdown", "reboot",
+        "format", "chown", "chmod", "kill", "poweroff"
+    ],
+    "require_user_confirmation": false,
+    "max_file_size_bytes": 1048576,
+    "blocked_file_extensions": [
+        ".exe", ".dll", ".bin", ".sh", ".bat", ".cmd", ".so", ".dylib"
+    ]
+}

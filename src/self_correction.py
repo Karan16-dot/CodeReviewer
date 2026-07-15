@@ -34,7 +34,7 @@ class SelfCorrectionOrchestrator:
         self.client = client
         self.workspace_root = Path(workspace_root).resolve()
         self.runner = CommandRunner(workspace_root=str(self.workspace_root))
-        self.editor = FileEditor()
+        self.editor = FileEditor(workspace_root=str(self.workspace_root))
 
     def run_command_with_correction(self, command: str, max_retries: int = 3) -> Dict[str, Any]:
         """

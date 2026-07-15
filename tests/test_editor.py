@@ -8,7 +8,7 @@ def test_backup_and_undo(tmp_path):
     file_path.write_text("Hello World", encoding="utf-8")
 
     backup_dir = tmp_path / "backups"
-    editor = FileEditor(backup_dir=str(backup_dir))
+    editor = FileEditor(backup_dir=str(backup_dir), workspace_root=str(tmp_path))
 
     # Verify backup copies file
     assert editor.backup(file_path) is True
@@ -30,7 +30,7 @@ def test_write_triggers_automatic_backup(tmp_path):
     file_path = tmp_path / "hello.txt"
     file_path.write_text("Original content", encoding="utf-8")
 
-    editor = FileEditor(backup_dir=str(tmp_path / "backups"))
+    editor = FileEditor(backup_dir=str(tmp_path / "backups"), workspace_root=str(tmp_path))
     editor.write(file_path, "Overwritten content")
 
     assert file_path.read_text(encoding="utf-8") == "Overwritten content"
@@ -42,7 +42,7 @@ def test_write_triggers_automatic_backup(tmp_path):
 def test_undo_new_file_deletes_it(tmp_path):
     """Verify that rolling back a newly created file deletes it from disk."""
     file_path = tmp_path / "new_file.txt"
-    editor = FileEditor(backup_dir=str(tmp_path / "backups"))
+    editor = FileEditor(backup_dir=str(tmp_path / "backups"), workspace_root=str(tmp_path))
 
     editor.write(file_path, "Brand new content")
     assert file_path.exists()
@@ -56,7 +56,7 @@ def test_apply_replacement_success(tmp_path):
     original = "def main():\n    print('start')\n    print('end')\n"
     file_path.write_text(original, encoding="utf-8")
 
-    editor = FileEditor()
+    editor = FileEditor(workspace_root=str(tmp_path))
     new_content = editor.apply_replacement(
         file_path,
         "    print('start')",
@@ -71,7 +71,7 @@ def test_apply_replacement_not_found(tmp_path):
     file_path = tmp_path / "code.py"
     file_path.write_text("foo bar", encoding="utf-8")
 
-    editor = FileEditor()
+    editor = FileEditor(workspace_root=str(tmp_path))
     with pytest.raises(ValueError) as exc_info:
         editor.apply_replacement(file_path, "baz", "qux")
     assert "not found" in str(exc_info.value)
@@ -81,7 +81,7 @@ def test_apply_replacement_multiple_matches(tmp_path):
     file_path = tmp_path / "code.py"
     file_path.write_text("duplicate\nduplicate\n", encoding="utf-8")
 
-    editor = FileEditor()
+    editor = FileEditor(workspace_root=str(tmp_path))
     with pytest.raises(ValueError) as exc_info:
         editor.apply_replacement(file_path, "duplicate", "single")
     assert "matches 2 occurrences" in str(exc_info.value)
@@ -91,7 +91,7 @@ def test_get_diff(tmp_path):
     file_path = tmp_path / "test.txt"
     file_path.write_text("line 1\nline 2\n", encoding="utf-8")
 
-    editor = FileEditor()
+    editor = FileEditor(workspace_root=str(tmp_path))
     diff = editor.get_diff(file_path, "line 1\nline 3\n")
 
     assert "a/test.txt" in diff
