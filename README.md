@@ -149,6 +149,9 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/telemetry show` - Prints aggregate usage and execution duration metrics.
   - `/telemetry export <dest_path>` - Saves telemetry events to a JSON file.
   - `/telemetry clear` - Purges the local telemetry database table.
+- **Remote Repositories (Phase 18+)**:
+  - `/github-clone <owner>/<repo> [dest_path] [branch]` - Clones a remote repository structure using the GitHub API.
+  - `/github-pr <owner>/<repo> | <title> | <body> | <head> | [base]` - Submits a Pull Request to a remote GitHub repository.
 
 ---
 
@@ -170,6 +173,8 @@ When typing normal messages (without slash commands) in the chat prompt, the age
 12. **`run_with_self_correction(command, max_retries)`**: Runs a verification command (e.g. pytest). If it fails, parses the traceback, queries the LLM for corrections, applies patches, and retries.
 13. **`prepare_finetuning_data(output_path)`**: Exports conversations from the SQLite log history to a JSON Lines (JSONL) file for model fine-tuning.
 14. **`manage_finetuning(action, param)`**: Performs actions against the OpenAI Fine-Tuning endpoints (upload, start, status, list).
+15. **`github_clone(repo_slug, dest_path, branch)`**: Clones a remote repository structure and downloads its files using the GitHub API.
+16. **`github_create_pull_request(repo_slug, title, body, head, base)`**: Creates a Pull Request on a remote GitHub repository.
 
 ---
 
@@ -244,6 +249,15 @@ The agent supports custom features via third-party plugins loaded dynamically at
    - `get_commands()`: Returns a dictionary mapping custom CLI slash commands (e.g. `/my-cmd`) to python execution callbacks.
    - `get_tools()`: Returns custom agent tool functions and parameters schemas to register into the global `tool_registry`.
 2. **Dynamic Loader (`PluginManager`)**: Scans the workspace `plugins/` directory on CLI startup. It loads standalone python files (`my_plugin.py`) or python packages containing `__init__.py` using importlib spec loaders, discovers `BasePlugin` subclasses, and instantiates them dynamically.
+
+---
+
+## Remote Repositories & GitHub API Sync (Phase 18+)
+
+The GitHub client provides API-driven automation for remote repository checkouts and pull requests:
+1. **GitHub Integrations (`GitHubManager`)**: Connects to the GitHub API using Personal Access Tokens (PATs) configured via `GITHUB_TOKEN` or `GITHUB_PAT`. It handles recursive directory tree requests, blob downloads, and PR publishing using standard `urllib` calls.
+2. **API-driven Directory Clones**: Re-creates remote directory structure templates locally and fetches content blobs using the GitHub database API, bypassing standard Git CLI requirements.
+3. **Workspace Path Containment**: Runs workspace containment checks preventing downloads from mapping outside the destination folder (directory traversals).
 
 ---
 

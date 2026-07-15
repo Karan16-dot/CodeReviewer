@@ -11,6 +11,7 @@ from git_manager import GitManager
 from refactoring import RefactoringTransaction
 from self_correction import SelfCorrectionOrchestrator
 from finetuning import FineTuningDataPreparer, FineTuningManager
+from github_client import GitHubManager, GitHubError
 
 class ToolRegistry:
     """Registry that houses tool schemas and handles dispatch of tool invocations."""
@@ -542,3 +543,85 @@ MANAGE_FINETUNING_SCHEMA = {
 
 tool_registry.register("prepare_finetuning_data", prepare_finetuning_data, PREPARE_FINETUNING_DATA_SCHEMA)
 tool_registry.register("manage_finetuning", manage_finetuning, MANAGE_FINETUNING_SCHEMA)
+
+# GitHub Remote Repository tools implementation
+def github_clone(repo_slug: str, dest_path: str, branch: str = "main") -> str:
+    """Clones a remote repository structure and files locally using the GitHub API."""
+    try:
+        manager = GitHubManager()
+        count = manager.clone_repository(repo_slug, dest_path, branch)
+        return f"Successfully checked out remote repository '{repo_slug}' ({branch}) and downloaded {count} files to: {dest_path}"
+    except Exception as e:
+        return f"GitHub Checkout failed: {e}"
+
+
+def github_create_pull_request(repo_slug: str, title: str, body: str, head: str, base: str = "main") -> str:
+    """Creates a Pull Request on a remote GitHub repository."""
+    try:
+        parts = repo_slug.split("/")
+        if len(parts) != 2:
+            return "Error: Repository slug must be 'owner/repo'."
+        owner, repo = parts
+        manager = GitHubManager()
+        pr_info = manager.create_pull_request(owner, repo, title, body, head, base)
+        return f"Successfully created PR #{pr_info.get('number')}! PR URL: {pr_info.get('html_url')}"
+    except Exception as e:
+        return f"Failed to create PR: {e}"
+
+
+GITHUB_CLONE_SCHEMA = {
+    "name": "github_clone",
+    "description": "Clones a remote repository structure and downloads its files using the GitHub API.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "repo_slug": {
+                "type": "string",
+                "description": "The GitHub repository slug in the format 'owner/repo'."
+            },
+            "dest_path": {
+                "type": "string",
+                "description": "The local path inside the workspace to download files to."
+            },
+            "branch": {
+                "type": "string",
+                "description": "The target repository branch name (defaults to 'main')."
+            }
+        },
+        "required": ["repo_slug", "dest_path"]
+    }
+}
+
+GITHUB_CREATE_PR_SCHEMA = {
+    "name": "github_create_pull_request",
+    "description": "Creates a Pull Request on a remote GitHub repository.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "repo_slug": {
+                "type": "string",
+                "description": "The GitHub repository slug in the format 'owner/repo'."
+            },
+            "title": {
+                "type": "string",
+                "description": "The title of the Pull Request."
+            },
+            "body": {
+                "type": "string",
+                "description": "The description body text of the Pull Request."
+            },
+            "head": {
+                "type": "string",
+                "description": "The branch containing your proposed changes."
+            },
+            "base": {
+                "type": "string",
+                "description": "The branch you want to merge your changes into (defaults to 'main')."
+            }
+        },
+        "required": ["repo_slug", "title", "body", "head"]
+    }
+}
+
+tool_registry.register("github_clone", github_clone, GITHUB_CLONE_SCHEMA)
+tool_registry.register("github_create_pull_request", github_create_pull_request, GITHUB_CREATE_PR_SCHEMA)

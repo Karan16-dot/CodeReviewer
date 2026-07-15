@@ -721,6 +721,54 @@ class InteractiveCLI:
                         except Exception as e:
                             print(f"{Fore.RED}Log failed: {e}")
                         continue
+                    elif cmd == "/github-clone":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Usage: /github-clone <owner>/<repo> [dest_path] [branch]")
+                            continue
+                        sub_parts = path_arg.split()
+                        repo_slug = sub_parts[0]
+                        dest_path = sub_parts[1] if len(sub_parts) > 1 else repo_slug.split("/")[1]
+                        branch = sub_parts[2] if len(sub_parts) > 2 else "main"
+                        try:
+                            from github_client import GitHubManager
+                            print(f"\n{Fore.YELLOW}Cloning repository structure '{repo_slug}' ({branch}) via API...")
+                            manager = GitHubManager()
+                            count = manager.clone_repository(repo_slug, dest_path, branch)
+                            print(f"{Fore.GREEN}Successfully cloned {count} files to: {dest_path}")
+                        except Exception as e:
+                            print(f"{Fore.RED}GitHub checkout failed: {e}")
+                        continue
+                    elif cmd == "/github-pr":
+                        if path_arg == "." or not path_arg or "|" not in path_arg:
+                            print(f"{Fore.RED}Usage: /github-pr <owner>/<repo> | <title> | <body> | <head_branch> | [base_branch]")
+                            continue
+
+                        sub_parts = [p.strip() for p in path_arg.split("|")]
+                        if len(sub_parts) < 4:
+                            print(f"{Fore.RED}Error: PR creation requires 4 parameters: slug | title | body | head")
+                            continue
+
+                        repo_slug = sub_parts[0]
+                        title = sub_parts[1]
+                        body = sub_parts[2]
+                        head = sub_parts[3]
+                        base = sub_parts[4] if len(sub_parts) > 4 else "main"
+
+                        parts = repo_slug.split("/")
+                        if len(parts) != 2:
+                            print(f"{Fore.RED}Error: Repository slug must be in the format 'owner/repo'.")
+                            continue
+                        owner, repo = parts
+
+                        try:
+                            from github_client import GitHubManager
+                            print(f"\n{Fore.YELLOW}Submitting pull request to '{repo_slug}'...")
+                            manager = GitHubManager()
+                            pr_info = manager.create_pull_request(owner, repo, title, body, head, base)
+                            print(f"{Fore.GREEN}Successfully created PR #{pr_info.get('number')}! PR URL: {pr_info.get('html_url')}")
+                        except Exception as e:
+                            print(f"{Fore.RED}Failed to create PR: {e}")
+                        continue
                     elif cmd == "/telemetry":
                         if path_arg == "." or not path_arg:
                             print(f"{Fore.RED}Usage: /telemetry <action> [parameter]\n"
