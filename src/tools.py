@@ -275,6 +275,50 @@ GIT_LOG_SCHEMA = {
     }
 }
 
+# Memory recall tool implementation
+_mem_index = None
+
+def recall_memory(query: str, limit: int = 5) -> str:
+    """Searches past conversation memory semantically for relevant user queries or details."""
+    global _mem_index
+    try:
+        if _mem_index is None:
+            from llm.openai_client import OpenAIClient
+            from memory_index import MemoryIndex
+            client = OpenAIClient()
+            _mem_index = MemoryIndex(client=client)
+
+        matches = _mem_index.search_semantic(query, limit)
+        if not matches:
+            return "No matching memories found."
+
+        output = []
+        for idx, m in enumerate(matches, 1):
+            output.append(f"{idx}. (Score: {m['score']:.2f}) {m['text']}")
+        return "\n".join(output)
+    except Exception as e:
+        return f"Error recalling memory: {e}"
+
+
+RECALL_MEMORY_SCHEMA = {
+    "name": "recall_memory",
+    "description": "Searches the conversation history semantically for past topics, user names, preferences, or technical details.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "The semantic search query (e.g. 'favorite color' or 'architecture pattern')."
+            },
+            "limit": {
+                "type": "integer",
+                "description": "The maximum number of search results to return (defaults to 5)."
+            }
+        },
+        "required": ["query"]
+    }
+}
+
 # Initialize and populate the global registry
 tool_registry = ToolRegistry()
 tool_registry.register("read_file", read_file, READ_FILE_SCHEMA)
@@ -286,3 +330,4 @@ tool_registry.register("git_status", git_status, GIT_STATUS_SCHEMA)
 tool_registry.register("git_commit", git_commit, GIT_COMMIT_SCHEMA)
 tool_registry.register("git_diff", git_diff, GIT_DIFF_SCHEMA)
 tool_registry.register("git_log", git_log, GIT_LOG_SCHEMA)
+tool_registry.register("recall_memory", recall_memory, RECALL_MEMORY_SCHEMA)

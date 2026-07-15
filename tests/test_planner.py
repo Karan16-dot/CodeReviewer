@@ -30,6 +30,7 @@ def test_plan_command_react_loop(mock_client_class):
             "Plan created and goal completed!"
         ]
     ]
+    mock_client.get_embedding.return_value = [0.1, 0.2]
 
     # Mock tool registry execution
     cli.tool_registry = MagicMock()

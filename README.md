@@ -11,6 +11,8 @@ claude-code-agent/
 ├── docs/               # Technical documentation
 ├── examples/           # Code examples and usage recipes
 ├── logs/               # Application runtime log files
+│   ├── memory.db       # SQLite relational database storage
+│   └── chroma_db/      # ChromaDB persistent vector collection
 ├── prompts/            # Prompts templates (system/user)
 ├── src/                # Core Python package modules
 │   ├── llm/            # LLM API clients
@@ -20,7 +22,8 @@ claude-code-agent/
 │   ├── editor.py       # Safe file modification manager
 │   ├── executor.py     # Safe shell command execution engine
 │   ├── git_manager.py  # Git repository interaction manager
-│   ├── memory.py       # Conversation memory storage
+│   ├── memory.py       # Conversation memory storage (legacy)
+│   ├── memory_index.py # Relational/vector context storage
 │   ├── reader.py       # File reader and token counter
 │   ├── repository.py   # Repository filesystem walker
 │   ├── search.py       # Code base search and static analyzer
@@ -31,6 +34,7 @@ claude-code-agent/
 │   ├── test_git_manager.py # Git manager tests
 │   ├── test_main.py    # Main script tests
 │   ├── test_memory.py  # Memory manager tests
+│   ├── test_memory_index.py # SQLite/vector memory index tests
 │   ├── test_openai_client.py # OpenAI client tests
 │   ├── test_planner.py # ReAct planning loops tests
 │   ├── test_reader.py  # File reader tests
@@ -100,7 +104,7 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/help` - Show all available CLI instructions.
 - **Session Memory**:
   - `/history` - Print a styled log of past exchanges.
-  - `/clear` or `/delete` - Unlink current cache file and start a fresh session.
+  - `/clear` or `/delete` - Clear current context history in SQLite database and start a fresh session.
 - **Repository Explorer**:
   - `/scan [path]` - Scan directory contents, ignore development directories (`.git`, `venv`, `node_modules`), show file statistics, and detect language breakdown.
   - `/tree [path]` - Generate and print a text-based visual tree diagram of the directories and files.
@@ -128,8 +132,10 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/git-diff [file]` - Shows unified unstaged diff of files in the workspace.
   - `/git-branch [name]` - Lists branches, highlighting the active branch, or creates a new branch named `name` and checks out.
   - `/git-log [limit]` - Prints the recent commit log history.
-- **Planning Agent (Phase 10+)**:
-  - `/plan <goal>` - Instructs the agent to recursively analyze a multi-stage goal, layout an implementation list in `plan.md` in the root workspace, and execute it autonomously using the ReAct (Reasoning and Acting) framework.
+- **Planning Agent**:
+  - `/plan <goal>` - Instructs the agent to recursively analyze a goal, layout a task list in `plan.md` in the root workspace, and execute it autonomously using the ReAct framework.
+- **Memory Index (Phase 11+)**:
+  - `/memory <query>` - Searches long-term session database and vector embeddings index semantically, returning matched entries.
 
 ---
 
@@ -146,22 +152,25 @@ When typing normal messages (without slash commands) in the chat prompt, the age
 7. **`git_commit(message)`**: Stages all modified files and commits them.
 8. **`git_diff(file_path)`**: Returns unstaged diffs.
 9. **`git_log(limit)`**: Lists recent repository commits.
+10. **`recall_memory(query, limit)`**: Programmatically recall past conversation history or user preferences semantically.
 
 ---
 
-## ReAct Planning Loop (Phase 10+)
+## Memory Index Architecture (Phase 11+)
 
-When you start an autonomous planning session using `/plan <goal>`, the agent implements the **ReAct (Reasoning and Acting) Loop**:
-1. **Plan Formulation**: The agent identifies the sub-tasks required to achieve the goal and writes them to a persistent file named `plan.md` in the repository root.
-2. **Autonomous Tool Selection**: In a loop (allowing up to 12 iterations), the agent reads files, searches symbols, runs commands, or updates files.
-3. **Observation & Plan Tracking**: The agent updates `plan.md` checkmarks (e.g. marking `[ ]` as `[x]`) as it finishes tasks.
-4. **Result Summary**: Once all checkboxes are checked, the loop exits and prints a completion report.
+The Memory Index features a hybrid vector database layer:
+1. **Relational Context Store (SQLite)**: Conversation history messages and metadata are saved incrementally to relational tables in `logs/memory.db`.
+2. **Semantic Search Store (ChromaDB / NumPy fallback)**:
+   - Uses ChromaDB's persistent vector collection when available.
+   - If binary dependencies are missing on the target host, it seamlessly runs a fallback vector database using NumPy matrices to calculate cosine similarity:
+     $$\text{Similarity} = \frac{\mathbf{A} \cdot \mathbf{B}}{\|\mathbf{A}\| \|\mathbf{B}\|}$$
+   - Both layers query OpenAI's `text-embedding-3-small` embeddings API to vectorize text inputs dynamically.
 
 ---
 
 ## Security Policies
 
-To protect the host environment during automated command execution, all commands processed by the agent (both via the `run_command` tool and `/run` CLI directive) pass through the `CommandRunner` sanitizer:
+To protect the host environment during automated command execution, all commands processed by the agent pass through the `CommandRunner` sanitizer:
 - **Blocked Commands**: Destructive binaries are explicitly blocked from executing (includes `del`, `rmdir`, `mkfs`, `dd`, `shutdown`, `reboot`, `format`, `chown`, `chmod`). Attempting to run them raises a `SecurityError`.
 - **Blocked Parameters**: Dangerous command flag patterns, such as root recursive deletions (`rm -rf /`), are identified and blocked immediately.
 

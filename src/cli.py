@@ -9,6 +9,7 @@ from reader import FileReader
 from search import CodeSearcher
 from editor import FileEditor
 from tools import tool_registry
+from memory_index import MemoryIndex
 
 # Initialize colorama for colored CLI output
 init(autoreset=True)
@@ -20,6 +21,7 @@ class InteractiveCLI:
         self.messages = []
         self.client = None
         self.memory = ConversationMemory()
+        self.memory_index = None
         self.file_reader = FileReader()
         self.file_editor = FileEditor()
         self.tool_registry = tool_registry
@@ -102,22 +104,26 @@ class InteractiveCLI:
         print(f"{Fore.YELLOW}Type 'exit' or 'quit' to close the chat. Type '/help' for options.\n")
 
         self.initialize_client()
+        self.memory_index = MemoryIndex(client=self.client)
+        self.session_id = "default_session"
 
-        # Handle conversation memory resume
+        # Handle conversation memory resume from SQLite
         try:
-            saved_messages = self.memory.load()
+            saved_messages = self.memory_index.load_messages(self.session_id)
             if saved_messages:
-                resume = input(f"{Fore.YELLOW}Found previous conversation. Resume? (y/N): ").strip().lower()
+                resume = input(f"{Fore.YELLOW}Found previous conversation in SQLite. Resume? (y/N): ").strip().lower()
                 if resume in ["y", "yes"]:
                     self.messages = saved_messages
                     print(f"{Fore.GREEN}Resumed conversation. Showing history:")
                     self.print_history()
                 else:
-                    self.memory.delete()
+                    self.memory_index.clear_session(self.session_id)
                     self.messages = [{"role": "system", "content": self.system_prompt}]
+                    self.memory_index.store_message(self.session_id, "system", self.system_prompt)
                     print(f"{Fore.GREEN}Started new conversation session.\n")
             else:
                 self.messages = [{"role": "system", "content": self.system_prompt}]
+                self.memory_index.store_message(self.session_id, "system", self.system_prompt)
         except Exception as e:
             print(f"{Fore.RED}Warning: Failed to load memory: {e}. Starting fresh session.")
             self.messages = [{"role": "system", "content": self.system_prompt}]
@@ -145,9 +151,10 @@ class InteractiveCLI:
                         continue
                     elif cmd in ["/clear", "/delete"]:
                         try:
-                            self.memory.delete()
+                            self.memory_index.clear_session(self.session_id)
                             self.messages = [{"role": "system", "content": self.system_prompt}]
-                            print(f"{Fore.GREEN}Conversation memory cleared.")
+                            self.memory_index.store_message(self.session_id, "system", self.system_prompt)
+                            print(f"{Fore.GREEN}Conversation memory cleared in SQLite.")
                         except Exception as e:
                             print(f"{Fore.RED}Failed to clear memory: {e}")
                         continue
@@ -609,6 +616,22 @@ class InteractiveCLI:
                         except Exception as e:
                             print(f"{Fore.RED}Log failed: {e}")
                         continue
+                    elif cmd == "/memory":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a query for semantic memory search. Usage: /memory <query>")
+                            continue
+                        try:
+                            print(f"\n{Fore.YELLOW}Searching semantic memory index for: \"{path_arg}\"...\n")
+                            matches = self.memory_index.search_semantic(path_arg)
+                            if not matches:
+                                print(f"{Fore.WHITE}No matching memories found.")
+                            else:
+                                for idx, m in enumerate(matches, 1):
+                                    print(f"  {Fore.GREEN}{idx}. [Score: {m['score']:.2f}]{Fore.WHITE} {m['text']}")
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Memory search failed: {e}")
+                        continue
                     elif cmd == "/plan":
                         if path_arg == "." or not path_arg:
                             print(f"{Fore.RED}Please provide a goal. Usage: /plan <goal>")
@@ -710,6 +733,11 @@ class InteractiveCLI:
                         continue
 
                 self.messages.append({"role": "user", "content": user_input})
+                try:
+                    self.memory_index.store_message(self.session_id, "user", user_input)
+                    self.memory_index.store_embedding(user_input, {"type": "user_prompt"})
+                except Exception as e:
+                    print(f"{Fore.RED}Warning: Failed to write SQLite memory: {e}")
 
                 print(f"{Fore.GREEN}{Style.BRIGHT}Agent > {Style.RESET_ALL}", end="", flush=True)
 
@@ -735,6 +763,10 @@ class InteractiveCLI:
                     if not tool_calls:
                         if response_content:
                             self.messages.append({"role": "assistant", "content": response_content})
+                            try:
+                                self.memory_index.store_message(self.session_id, "assistant", response_content)
+                            except Exception as e:
+                                print(f"{Fore.RED}Warning: Failed to write SQLite memory: {e}")
                         break
 
                     # Format tool calls in history
@@ -754,6 +786,10 @@ class InteractiveCLI:
                         "content": response_content or None,
                         "tool_calls": api_tool_calls
                     })
+                    try:
+                        self.memory_index.store_message(self.session_id, "assistant", response_content or None, api_tool_calls)
+                    except Exception as e:
+                        print(f"{Fore.RED}Warning: Failed to write SQLite memory: {e}")
 
                     # Execute each tool call
                     for tc in tool_calls:
@@ -782,6 +818,15 @@ class InteractiveCLI:
                             "name": name,
                             "content": tool_result
                         })
+                        try:
+                            self.memory_index.store_message(
+                                self.session_id,
+                                "tool",
+                                tool_result,
+                                [{"id": tc_id, "name": name}]
+                            )
+                        except Exception as e:
+                            print(f"{Fore.RED}Warning: Failed to write SQLite memory: {e}")
 
                     # Print header for subsequent response turn
                     print(f"{Fore.GREEN}{Style.BRIGHT}Agent > {Style.RESET_ALL}", end="", flush=True)

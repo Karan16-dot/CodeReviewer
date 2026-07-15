@@ -79,3 +79,16 @@ class OpenAIClient(LLMClient):
             raise LLMError(f"OpenAI API failure: {e}")
         except Exception as e:
             raise LLMError(f"Unexpected error communicating with OpenAI: {e}")
+
+    def get_embedding(self, text: str, model: str = "text-embedding-3-small") -> List[float]:
+        """Generates a vector embedding for the input text using OpenAI's API."""
+        try:
+            response = self.client.embeddings.create(
+                input=[text],
+                model=model
+            )
+            return response.data[0].embedding
+        except OpenAIError as e:
+            raise LLMError(f"OpenAI API failure generating embedding: {e}")
+        except Exception as e:
+            raise LLMError(f"Unexpected error generating embedding: {e}")
