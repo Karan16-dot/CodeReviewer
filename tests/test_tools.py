@@ -44,6 +44,5 @@ def test_write_file_tool(mock_editor):
 def test_run_command_tool():
     """Verify run_command executes standard system shell calls."""
     res = run_command("echo Hello")
-    assert "STDOUT" in res
     assert "Hello" in res
     assert "Exit Code: 0" in res

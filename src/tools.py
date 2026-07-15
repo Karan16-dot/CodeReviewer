@@ -6,6 +6,7 @@ from reader import FileReader
 from editor import FileEditor
 from repository import RepositoryExplorer
 from search import CodeSearcher
+from executor import CommandRunner
 
 class ToolRegistry:
     """Registry that houses tool schemas and handles dispatch of tool invocations."""
@@ -77,28 +78,17 @@ def list_directory(path: str = ".") -> str:
         return f"Error exploring directory: {e}"
 
 def run_command(command: str) -> str:
-    """Executes a terminal shell command on the host system and returns output."""
+    """Executes a terminal shell command on the host system, streaming output and returning it."""
     try:
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
-            text=True,
-            timeout=30
-        )
+        runner = CommandRunner()
         output = []
-        if result.stdout:
-            output.append(f"STDOUT:\n{result.stdout}")
-        if result.stderr:
-            output.append(f"STDERR:\n{result.stderr}")
-        if not output:
-            output.append("Command executed with no output.")
-        output.append(f"Exit Code: {result.returncode}")
-        return "\n".join(output)
-    except subprocess.TimeoutExpired:
-        return "Error: Command execution timed out after 30 seconds."
+        # Run streaming, printing stdout live to the console
+        for line in runner.run_streaming(command):
+            print(line, end="", flush=True)
+            output.append(line)
+        return "".join(output)
     except Exception as e:
-        return f"Error running command: {e}"
+        return f"Error executing command: {e}"
 
 
 # Define OpenAI tool schemas

@@ -18,6 +18,7 @@ claude-code-agent/
 │   │   └── openai_client.py # OpenAI SDK client implementation
 │   ├── cli.py          # Interactive console chat interface
 │   ├── editor.py       # Safe file modification manager
+│   ├── executor.py     # Safe shell command execution engine
 │   ├── memory.py       # Conversation memory storage
 │   ├── reader.py       # File reader and token counter
 │   ├── repository.py   # Repository filesystem walker
@@ -25,6 +26,7 @@ claude-code-agent/
 │   └── tools.py        # Workspace agent tools and registry
 ├── tests/              # Pytest unit testing suite
 │   ├── test_editor.py  # Editor modification tests
+│   ├── test_executor.py # Command execution runner tests
 │   ├── test_main.py    # Main script tests
 │   ├── test_memory.py  # Memory manager tests
 │   ├── test_openai_client.py # OpenAI client tests
@@ -101,23 +103,27 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/tree [path]` - Generate and print a text-based visual tree diagram of the directories and files.
 - **Code Reader**:
   - `/read <file>` - Reads a file and prints its contents with line numbers and token stats.
-  - `/explain <file>` - Sends a file to the LLM to get a structured explanation (handles large files using token chunking).
+  - `/explain <file>` - Sends a file to the LLM to get a structured explanation.
   - `/summarize` - Bundles project tree structure and documentation to get an architectural summary from the LLM.
   - `/entrypoint` - Analyses the project and suggests candidate application starting points.
 - **Search Engine**:
   - `/find <query>` - Searches all non-ignored files for keyword matches.
   - `/grep <regex>` - Searches files for lines matching regular expression patterns.
   - `/todo` - Scans all project files for `TODO`, `FIXME`, `HACK`, or `BUG` comments.
-  - `/symbols [file]` - Uses AST parsing to list Python class and function definitions across the workspace (or in a specific file).
+  - `/symbols [file]` - Uses AST parsing to list Python class and function definitions.
   - `/bugs` - Performs static analysis on Python files using AST traversal to flag empty `except` handlers or unsafe dynamic execution functions (`eval`/`exec`).
 - **File Editing**:
   - `/replace <file>` - Launches interactive search-and-replace prompts, displays a color-coded unified diff preview, and asks for confirmation before writing changes.
   - `/diff <file>` - Shows current modifications made to `file` in this session compared to its original backup.
   - `/undo <file>` - Rolls back session changes and restores `file` to its original backed-up state.
+- **Command Runner (Phase 8+)**:
+  - `/run <command>` - Runs a custom shell command in the workspace, streaming the stdout/stderr live to the terminal.
+  - `/test` - Shortcut to execute the Pytest unit testing suite and stream outputs.
+  - `/git-status` - Shortcut to execute the `git status` command.
 
 ---
 
-## Agent Function Calling (Phase 7+)
+## Agent Function Calling
 
 When typing normal messages (without slash commands) in the chat prompt, the agent has access to several local tools. The model can automatically choose to call one or more of these functions to fulfill your request:
 
@@ -125,13 +131,17 @@ When typing normal messages (without slash commands) in the chat prompt, the age
 2. **`write_file(path, content)`**: Writes code/text to a file, making a session rollback backup.
 3. **`search_files(query, is_regex)`**: Searches the project files for strings or patterns.
 4. **`list_directory(path)`**: Lists files and folders in a tree format.
-5. **`run_command(command)`**: Runs a shell command on the host (with a 30s timeout).
+5. **`run_command(command)`**: Runs a shell command on the host securely, streaming results to the user (restricted by safety blocklists).
 
-### Execution Loop
-The CLI implements an autonomous **Think-Act-Observe** reasoning loop. When the model invokes a tool:
-1. The CLI interceptor halts output, parses arguments, and prints the tool invocation.
-2. It executes the tool locally and shows a snippet of the result.
-3. It pushes the result back to the model, allowing it to repeat reasoning or finalize the answer.
+---
+
+## Security Policies (Phase 8+)
+
+To protect the host environment during automated command execution, all commands processed by the agent (both via the `run_command` tool and `/run` CLI directive) pass through the `CommandRunner` sanitizer:
+- **Blocked Commands**: Destructive binaries are explicitly blocked from executing (includes `del`, `rmdir`, `mkfs`, `dd`, `shutdown`, `reboot`, `format`, `chown`, `chmod`). Attempting to run them raises a `SecurityError`.
+- **Blocked Parameters**: Dangerous command flag patterns, such as root recursive deletions (`rm -rf /`), are identified and blocked immediately.
+
+Additionally, command execution prioritizes the local project virtual environment's bin folder (e.g. `venv/Scripts` or `venv/bin`) within the PATH, ensuring local developer CLI binaries execute cleanly.
 
 ---
 

@@ -67,6 +67,9 @@ class InteractiveCLI:
         print(f"  {Fore.CYAN}/replace <file>{Fore.RESET}     - Interactively replace a block of code in a file")
         print(f"  {Fore.CYAN}/diff <file>{Fore.RESET}        - Show the session changes made to a file")
         print(f"  {Fore.CYAN}/undo <file>{Fore.RESET}        - Roll back session changes made to a file")
+        print(f"  {Fore.CYAN}/run <command>{Fore.RESET}      - Run shell command asynchronously with real-time output")
+        print(f"  {Fore.CYAN}/test{Fore.RESET}               - Shortcut to execute pytest unit test suite")
+        print(f"  {Fore.CYAN}/git-status{Fore.RESET}         - Shortcut to execute git status command")
         print(f"  {Fore.CYAN}/history{Fore.RESET}            - Print current conversation history")
         print(f"  {Fore.CYAN}/clear{Fore.RESET}              - Delete memory and start a new chat")
         print(f"  {Fore.CYAN}/delete{Fore.RESET}             - Same as /clear")
@@ -477,6 +480,42 @@ class InteractiveCLI:
                                 print(f"{Fore.YELLOW}No backup found for {path_arg} in this session.")
                         except Exception as e:
                             print(f"{Fore.RED}Undo failed: {e}")
+                        continue
+                    elif cmd == "/run":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a command string to run. Usage: /run <command>")
+                            continue
+                        try:
+                            from executor import CommandRunner
+                            print(f"\n{Fore.YELLOW}Executing custom command stream: {path_arg}\n")
+                            runner = CommandRunner()
+                            for line in runner.run_streaming(path_arg):
+                                print(line, end="", flush=True)
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Execution failed: {e}")
+                        continue
+                    elif cmd == "/test":
+                        try:
+                            from executor import CommandRunner
+                            print(f"\n{Fore.YELLOW}Running pytest suite stream...\n")
+                            runner = CommandRunner()
+                            for line in runner.run_streaming("pytest"):
+                                print(line, end="", flush=True)
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Tests execution failed: {e}")
+                        continue
+                    elif cmd == "/git-status":
+                        try:
+                            from executor import CommandRunner
+                            print(f"\n{Fore.YELLOW}Running git status stream...\n")
+                            runner = CommandRunner()
+                            for line in runner.run_streaming("git status"):
+                                print(line, end="", flush=True)
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Git status failed: {e}")
                         continue
                     else:
                         print(f"{Fore.RED}Unknown command: {user_input}. Type '/help' for options.")
