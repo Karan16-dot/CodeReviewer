@@ -16,11 +16,13 @@ claude-code-agent/
 │   │   ├── client.py   # Base client interface
 │   │   └── openai_client.py # OpenAI SDK client implementation
 │   ├── cli.py          # Interactive console chat interface
-│   └── memory.py       # Conversation memory storage
+│   ├── memory.py       # Conversation memory storage
+│   └── repository.py   # Repository filesystem walker
 ├── tests/              # Pytest unit testing suite
 │   ├── test_main.py    # Main script tests
 │   ├── test_memory.py  # Memory manager tests
-│   └── test_openai_client.py # OpenAI client tests
+│   ├── test_openai_client.py # OpenAI client tests
+│   └── test_repository.py # Repository walker tests
 ├── .env.example        # Environment variable configuration template
 ├── .gitignore          # Git exclusion rules
 ├── main.py             # CLI entry point
@@ -76,18 +78,18 @@ Start the interactive terminal session:
 python main.py
 ```
 
-### Conversation Memory (Phase 2+)
+### CLI Slash Commands
 
-The CLI maintains a persistent session cache inside a local file named `messages.json` in the project root directory.
+You can manage your session, view statistics, and scan directory trees using built-in slash commands in the CLI chat prompt:
 
-- **Startup Resume**: If a previous conversation history is found in `messages.json`, the CLI will prompt you whether to resume:
-  ```text
-  Found previous conversation. Resume? (y/N):
-  ```
-- **Slash Commands**: You can enter special inline commands in the CLI chat prompt:
-  - `/help` - Show available instructions
-  - `/history` - Display styled transcripts of the current chat
-  - `/clear` or `/delete` - Remove conversation cache from the disk and start a new chat session
+- **Help Menu**:
+  - `/help` - Show all available CLI instructions.
+- **Session Memory**:
+  - `/history` - Print a styled log of past exchanges.
+  - `/clear` or `/delete` - Unlink current cache file and start a fresh session.
+- **Repository Explorer**:
+  - `/scan [path]` - Scan directory contents, ignore development directories (`.git`, `venv`, `node_modules`), show file statistics, and detect language breakdown.
+  - `/tree [path]` - Generate and print a text-based visual tree diagram of the directories and files (ignores system and cache directories).
 
 ---
 

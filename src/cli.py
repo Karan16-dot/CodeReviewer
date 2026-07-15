@@ -3,6 +3,7 @@ from colorama import init, Fore, Style
 from llm.openai_client import OpenAIClient
 from llm.client import LLMError
 from memory import ConversationMemory
+from repository import RepositoryExplorer
 
 # Initialize colorama for colored CLI output
 init(autoreset=True)
@@ -28,11 +29,13 @@ class InteractiveCLI:
     def print_help(self):
         """Prints available slash commands."""
         print(f"\n{Fore.YELLOW}{Style.BRIGHT}Available Commands:")
-        print(f"  {Fore.CYAN}/help{Fore.RESET}        - Show this help message")
-        print(f"  {Fore.CYAN}/history{Fore.RESET}     - Print current conversation history")
-        print(f"  {Fore.CYAN}/clear{Fore.RESET}       - Delete memory and start a new chat")
-        print(f"  {Fore.CYAN}/delete{Fore.RESET}      - Same as /clear")
-        print(f"  {Fore.CYAN}exit{Fore.RESET} or {Fore.CYAN}quit{Fore.RESET} - Exit the agent shell\n")
+        print(f"  {Fore.CYAN}/help{Fore.RESET}               - Show this help message")
+        print(f"  {Fore.CYAN}/scan [path]{Fore.RESET}        - Scan directory statistics (defaults to .)")
+        print(f"  {Fore.CYAN}/tree [path]{Fore.RESET}        - Print visual directory tree (defaults to .)")
+        print(f"  {Fore.CYAN}/history{Fore.RESET}            - Print current conversation history")
+        print(f"  {Fore.CYAN}/clear{Fore.RESET}              - Delete memory and start a new chat")
+        print(f"  {Fore.CYAN}/delete{Fore.RESET}             - Same as /clear")
+        print(f"  {Fore.CYAN}exit{Fore.RESET} or {Fore.CYAN}quit{Fore.RESET}        - Exit the agent shell\n")
 
     def print_history(self):
         """Displays the loaded conversation history."""
@@ -90,7 +93,10 @@ class InteractiveCLI:
 
                 # Handle slash commands
                 if user_input.startswith("/"):
-                    cmd = user_input.lower()
+                    parts = user_input.split(maxsplit=1)
+                    cmd = parts[0].lower()
+                    path_arg = parts[1] if len(parts) > 1 else "."
+
                     if cmd == "/help":
                         self.print_help()
                         continue
@@ -104,6 +110,33 @@ class InteractiveCLI:
                         continue
                     elif cmd == "/history":
                         self.print_history()
+                        continue
+                    elif cmd == "/scan":
+                        try:
+                            explorer = RepositoryExplorer(root_path=path_arg)
+                            stats = explorer.get_summary_stats()
+                            total = stats["total_files"]
+                            languages = stats["languages"]
+
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}Repository Scan Summary for: {explorer.root_path}")
+                            print(f"{Fore.GREEN}Total Files: {total}")
+                            if total > 0:
+                                print(f"{Fore.YELLOW}{Style.BRIGHT}Breakdown by Language:")
+                                for lang, count in sorted(languages.items(), key=lambda x: x[1], reverse=True):
+                                    pct = (count / total) * 100
+                                    print(f"  {Fore.CYAN}{lang:<18}: {count:<3} ({pct:.1f}%)")
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Scan failed: {e}")
+                        continue
+                    elif cmd == "/tree":
+                        try:
+                            explorer = RepositoryExplorer(root_path=path_arg)
+                            tree_visual = explorer.build_tree()
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}Directory Tree for: {explorer.root_path}")
+                            print(f"{Fore.WHITE}{tree_visual}\n")
+                        except Exception as e:
+                            print(f"{Fore.RED}Failed to build tree: {e}")
                         continue
                     else:
                         print(f"{Fore.RED}Unknown command: {user_input}. Type '/help' for options.")
