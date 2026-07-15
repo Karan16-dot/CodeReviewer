@@ -70,6 +70,7 @@ class InteractiveCLI:
         print(f"  {Fore.CYAN}/replace <file>{Fore.RESET}     - Interactively replace a block of code in a file")
         print(f"  {Fore.CYAN}/diff <file>{Fore.RESET}        - Show the session changes made to a file")
         print(f"  {Fore.CYAN}/undo <file>{Fore.RESET}        - Roll back session changes made to a file")
+        print(f"  {Fore.CYAN}/correct <command>{Fore.RESET} - Execute command under autonomous self-correction retry loop")
         print(f"  {Fore.CYAN}/run <command>{Fore.RESET}      - Run shell command asynchronously with real-time output")
         print(f"  {Fore.CYAN}/test{Fore.RESET}               - Shortcut to execute pytest unit test suite")
         print(f"  {Fore.CYAN}/git-status{Fore.RESET}         - Shortcut to execute git status command")
@@ -559,6 +560,38 @@ class InteractiveCLI:
                                 print(f"{Fore.YELLOW}No backup found for {path_arg} in this session.")
                         except Exception as e:
                             print(f"{Fore.RED}Undo failed: {e}")
+                        continue
+                    elif cmd == "/correct":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a command. Usage: /correct <command>")
+                            continue
+                        try:
+                            from self_correction import SelfCorrectionOrchestrator
+                            print(f"\n{Fore.YELLOW}⚙ Starting Self-Correction Command Runner for: '{path_arg}'")
+                            orchestrator = SelfCorrectionOrchestrator(client=self.client)
+                            result = orchestrator.run_command_with_correction(path_arg, max_retries=3)
+
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}=== Run Log Summary ===")
+                            print(f"{Fore.WHITE}Status: {result['status']}")
+                            print(f"{Fore.WHITE}Retries used: {result['retries']}")
+
+                            if result.get("steps"):
+                                print(f"\n{Fore.YELLOW}Correction Steps:")
+                                for step in result["steps"]:
+                                    print(f"  {Fore.CYAN}- Step {step['retry']}: Command: '{step['command']}' Exit Code: {step['exit_code']}")
+                                    if "applied_fix" in step:
+                                        fix = step["applied_fix"]
+                                        print(f"    {Fore.GREEN}Applied Fix to {fix['file']}:")
+                                        print(f"      Search: {fix['search']}")
+                                        print(f"      Replace: {fix['replace']}")
+                                    elif "applied_fix_error" in step:
+                                        print(f"    {Fore.RED}Error applying fix: {step['applied_fix_error']}")
+
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}=== Final Output Preview ===")
+                            print(f"{Fore.WHITE}{result['output']}")
+                            print(f"{Fore.GREEN}{Style.BRIGHT}============================\n")
+                        except Exception as e:
+                            print(f"{Fore.RED}Self-correction runner failed: {e}")
                         continue
                     elif cmd == "/run":
                         if path_arg == "." or not path_arg:

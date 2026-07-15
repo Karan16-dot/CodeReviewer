@@ -137,6 +137,8 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/plan <goal>` - Instructs the agent to recursively analyze a goal, layout a task list in `plan.md` in the root workspace, and execute it autonomously using the ReAct framework.
 - **Memory Index (Phase 11+)**:
   - `/memory <query>` - Searches long-term session database and vector embeddings index semantically, returning matched entries.
+- **Self-Correction Loop (Phase 13+)**:
+  - `/correct <command>` - Runs a command. If execution fails, initiates an autonomous loop parsing tracebacks, reading line contexts, querying the LLM for corrections, applying updates, and retrying.
 
 ---
 
@@ -155,6 +157,7 @@ When typing normal messages (without slash commands) in the chat prompt, the age
 9. **`git_log(limit)`**: Lists recent repository commits.
 10. **`recall_memory(query, limit)`**: Programmatically recall past conversation history or user preferences semantically.
 11. **`apply_refactor(edits, validate)`**: Applies search-and-replace block changes across multiple files atomically. If validation checks fail, rolls back all changes.
+12. **`run_with_self_correction(command, max_retries)`**: Runs a verification command (e.g. pytest). If it fails, parses the traceback, queries the LLM for corrections, applies patches, and retries.
 
 ---
 
@@ -186,6 +189,15 @@ The multi-file modification subsystem manages coordinated edits across files ato
 1. **Refactoring Transactions (`RefactoringTransaction`)**: Edit actions (file path, search string, replace string) are queued and executed in-memory. Commit actions are atomic: targets are backed up beforehand, and any writing fault triggers a automatic restore pipeline to revert modified files to their original state.
 2. **AST Parser Syntax Checks (`CodeValidator`)**: Evaluates the modified file's syntax tree using `ast.parse()`, intercepting formatting errors before writes occur.
 3. **Workspace Imports Resolver**: Walks `Import` and `ImportFrom` AST blocks. Relative imports are resolved using file paths, while absolute imports are matched against local directories (`src/`, `.`) and python package indices, highlighting broken dependencies.
+
+---
+
+## Self-Correction Loop (Phase 13+)
+
+The autonomous self-correction loop is designed to automatically detect and repair runtime failures:
+1. **Traceback Parsing (`TracebackParser`)**: Scans console output logs (stdout/stderr) for Python traceback markers (`File "...", line ...`). It isolates the source file path and line number of the error location while automatically skipping external standard library modules.
+2. **Context Gathering & LLM Correction**: Reads a line context window (e.g. 10 lines) around the error location. It presents the error trace and code window to the LLM, prompting it to produce a targeted search-and-replace patch.
+3. **Execution Retries (`SelfCorrectionOrchestrator`)**: Applies the search-and-replace edit to the file on disk and re-runs the verification command. The loop repeats (up to 3 retries) until the exit code is 0 (success) or retries are exhausted.
 
 ---
 

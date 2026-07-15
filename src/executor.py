@@ -2,7 +2,7 @@ import subprocess
 import shlex
 import os
 from pathlib import Path
-from typing import Generator, List
+from typing import Generator, List, Tuple
 
 class SecurityError(Exception):
     """Raised when a command violates execution security policies."""
@@ -101,3 +101,41 @@ class CommandRunner:
             yield "\nError: Process timed out and was terminated after exceeding limits."
         except Exception as e:
             yield f"\nError running process: {e}"
+
+    def run(self, command: str, timeout: float = 60.0) -> Tuple[str, str, int]:
+        """
+        Executes a command synchronously and returns (stdout, stderr, exit_code).
+        Raises SecurityError if command is unsafe.
+        """
+        try:
+            self.sanitize_command(command)
+        except SecurityError as e:
+            return "", f"Security Error: {e}", 1
+
+        cwd = str(self.workspace_root)
+        env = os.environ.copy()
+        venv_bin = self.workspace_root / "venv" / "Scripts"
+        if not venv_bin.exists():
+            venv_bin = self.workspace_root / "venv" / "bin"
+
+        if venv_bin.exists():
+            env["PATH"] = str(venv_bin) + os.pathsep + env.get("PATH", "")
+
+        try:
+            res = subprocess.run(
+                command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                cwd=cwd,
+                env=env,
+                timeout=timeout
+            )
+            return res.stdout, res.stderr, res.returncode
+        except subprocess.TimeoutExpired as e:
+            stdout = e.stdout if isinstance(e.stdout, str) else ""
+            stderr = e.stderr if isinstance(e.stderr, str) else ""
+            return stdout, stderr + "\nError: Process timed out.", 1
+        except Exception as e:
+            return "", f"Error running command: {e}", 1

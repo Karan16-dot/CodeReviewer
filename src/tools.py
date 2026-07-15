@@ -9,6 +9,7 @@ from search import CodeSearcher
 from executor import CommandRunner
 from git_manager import GitManager
 from refactoring import RefactoringTransaction
+from self_correction import SelfCorrectionOrchestrator
 
 class ToolRegistry:
     """Registry that houses tool schemas and handles dispatch of tool invocations."""
@@ -391,3 +392,53 @@ APPLY_REFACTOR_SCHEMA = {
 }
 
 tool_registry.register("apply_refactor", apply_refactor, APPLY_REFACTOR_SCHEMA)
+
+# Self-Correction tool implementation
+def run_with_self_correction(command: str, max_retries: int = 3) -> str:
+    """Runs a shell verification command and self-corrects any errors that arise during execution."""
+    try:
+        from llm.openai_client import OpenAIClient
+        client = OpenAIClient()
+        orchestrator = SelfCorrectionOrchestrator(client=client)
+        result = orchestrator.run_command_with_correction(command, max_retries=max_retries)
+
+        status = result["status"]
+        retries_used = result["retries"]
+        output = result["output"]
+
+        summary = f"Run status: {status}\nRetries used: {retries_used}\n"
+        if result.get("steps"):
+            steps_log = []
+            for step in result["steps"]:
+                steps_log.append(f" - Step {step['retry']}: Cmd: '{step['command']}' Exit: {step['exit_code']}")
+                if "applied_fix" in step:
+                    fix = step["applied_fix"]
+                    steps_log.append(f"   Applied Fix to {fix['file']}:\n   Search: {fix['search'][:60]}...\n   Replace: {fix['replace'][:60]}...")
+            summary += "Correction Steps:\n" + "\n".join(steps_log) + "\n"
+
+        summary += f"\nLast Output:\n{output}"
+        return summary
+    except Exception as e:
+        return f"Self-Correction engine failed: {e}"
+
+
+RUN_WITH_SELF_CORRECTION_SCHEMA = {
+    "name": "run_with_self_correction",
+    "description": "Runs a verification command (e.g., pytest, script.py). If it fails, reads the traceback logs, queries the LLM for fixes, applies patches, and retries.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": "The command string to execute in the workspace."
+            },
+            "max_retries": {
+                "type": "integer",
+                "description": "Maximum number of self-correction loop attempts (defaults to 3)."
+            }
+        },
+        "required": ["command"]
+    }
+}
+
+tool_registry.register("run_with_self_correction", run_with_self_correction, RUN_WITH_SELF_CORRECTION_SCHEMA)
