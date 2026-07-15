@@ -15,9 +15,11 @@ claude-code-agent/
 │   ├── llm/            # LLM API clients
 │   │   ├── client.py   # Base client interface
 │   │   └── openai_client.py # OpenAI SDK client implementation
-│   └── cli.py          # Interactive console chat interface
+│   ├── cli.py          # Interactive console chat interface
+│   └── memory.py       # Conversation memory storage
 ├── tests/              # Pytest unit testing suite
 │   ├── test_main.py    # Main script tests
+│   ├── test_memory.py  # Memory manager tests
 │   └── test_openai_client.py # OpenAI client tests
 ├── .env.example        # Environment variable configuration template
 ├── .gitignore          # Git exclusion rules
@@ -60,7 +62,7 @@ claude-code-agent/
    cp .env.example .env
    ```
 
-### Configuration (Phase 1+)
+### Configuration
 
 To interact with OpenAI, configure your API key in the `.env` file in the project root:
 ```env
@@ -74,7 +76,20 @@ Start the interactive terminal session:
 python main.py
 ```
 
-Inside the CLI, you can chat with the assistant in real-time. Type `exit` or `quit` to end the session.
+### Conversation Memory (Phase 2+)
+
+The CLI maintains a persistent session cache inside a local file named `messages.json` in the project root directory.
+
+- **Startup Resume**: If a previous conversation history is found in `messages.json`, the CLI will prompt you whether to resume:
+  ```text
+  Found previous conversation. Resume? (y/N):
+  ```
+- **Slash Commands**: You can enter special inline commands in the CLI chat prompt:
+  - `/help` - Show available instructions
+  - `/history` - Display styled transcripts of the current chat
+  - `/clear` or `/delete` - Remove conversation cache from the disk and start a new chat session
+
+---
 
 ### Running Tests
 

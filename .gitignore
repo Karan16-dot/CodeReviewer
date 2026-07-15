@@ -57,3 +57,6 @@ env/
 # Application logs
 logs/
 *.log
+
+# Chat History
+messages.json
