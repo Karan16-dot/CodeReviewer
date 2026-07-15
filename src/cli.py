@@ -70,6 +70,11 @@ class InteractiveCLI:
         print(f"  {Fore.CYAN}/run <command>{Fore.RESET}      - Run shell command asynchronously with real-time output")
         print(f"  {Fore.CYAN}/test{Fore.RESET}               - Shortcut to execute pytest unit test suite")
         print(f"  {Fore.CYAN}/git-status{Fore.RESET}         - Shortcut to execute git status command")
+        print(f"  {Fore.CYAN}/git-commit <msg>{Fore.RESET}   - Commit staged repository files")
+        print(f"  {Fore.CYAN}/git-diff [file]{Fore.RESET}    - View unstaged VCS modifications diff")
+        print(f"  {Fore.CYAN}/git-branch [name]{Fore.RESET}  - Swaps/lists local Git branches")
+        print(f"  {Fore.CYAN}/git-log [limit]{Fore.RESET}    - Lists recent commit log details")
+        print(f"  {Fore.CYAN}/plan <goal>{Fore.RESET}        - Initiate autonomous ReAct planning session (generates plan.md)")
         print(f"  {Fore.CYAN}/history{Fore.RESET}            - Print current conversation history")
         print(f"  {Fore.CYAN}/clear{Fore.RESET}              - Delete memory and start a new chat")
         print(f"  {Fore.CYAN}/delete{Fore.RESET}             - Same as /clear")
@@ -603,6 +608,102 @@ class InteractiveCLI:
                             print(f"{Fore.YELLOW}{Style.BRIGHT}-----------------------------------------\n")
                         except Exception as e:
                             print(f"{Fore.RED}Log failed: {e}")
+                        continue
+                    elif cmd == "/plan":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a goal. Usage: /plan <goal>")
+                            continue
+
+                        goal = path_arg
+                        planning_prompt = (
+                            f"You are executing a planning loop to achieve the following goal:\n"
+                            f"Goal: \"{goal}\"\n\n"
+                            f"Instructions:\n"
+                            f"1. You MUST first create a file named 'plan.md' in the root directory listing the tasks needed to achieve this goal.\n"
+                            f"2. Use the ReAct framework: Think -> Act -> Observe.\n"
+                            f"3. As you complete each task, update the 'plan.md' file by marking the task as completed: - [x] Task Name.\n"
+                            f"4. Once all tasks in 'plan.md' are completed and the goal is achieved, output a final response summarizing your accomplishments."
+                        )
+
+                        self.messages.append({"role": "user", "content": planning_prompt})
+                        print(f"\n{Fore.YELLOW}{Style.BRIGHT}🚀 Starting ReAct Planning Loop for goal: \"{goal}\"\n")
+
+                        loop_count = 0
+                        max_loops = 12
+
+                        while loop_count < max_loops:
+                            loop_count += 1
+                            tool_calls = None
+                            response_content = ""
+
+                            # Stream chat with tools
+                            stream = self.client.stream_chat(self.messages, tools=self.tool_registry.schemas)
+
+                            print(f"{Fore.GREEN}{Style.BRIGHT}Agent > {Style.RESET_ALL}", end="", flush=True)
+                            for event in stream:
+                                if isinstance(event, str):
+                                    print(event, end="", flush=True)
+                                    response_content += event
+                                elif isinstance(event, dict) and event.get("type") == "tool_calls":
+                                    tool_calls = event["calls"]
+                            print()
+
+                            if not tool_calls:
+                                if response_content:
+                                    self.messages.append({"role": "assistant", "content": response_content})
+                                break
+
+                            # Register tool calls
+                            api_tool_calls = []
+                            for tc in tool_calls:
+                                api_tool_calls.append({
+                                    "id": tc["id"],
+                                    "type": "function",
+                                    "function": {
+                                        "name": tc["name"],
+                                        "arguments": tc["arguments"]
+                                    }
+                                })
+
+                            self.messages.append({
+                                "role": "assistant",
+                                "content": response_content or None,
+                                "tool_calls": api_tool_calls
+                            })
+
+                            # Execute tools
+                            for tc in tool_calls:
+                                name = tc["name"]
+                                args_str = tc["arguments"]
+                                tc_id = tc["id"]
+
+                                import json
+                                try:
+                                    args = json.loads(args_str) if args_str else {}
+                                except json.JSONDecodeError as e:
+                                    tool_result = f"Error: Invalid arguments JSON: {e}"
+                                    args = {}
+                                else:
+                                    args_formatted = ", ".join(f"{k}={repr(v)}" for k, v in args.items())
+                                    print(f"\n{Fore.YELLOW}{Style.BRIGHT}⚙ Tool Run: {Fore.CYAN}{name}({args_formatted})")
+                                    tool_result = self.tool_registry.execute(name, args)
+                                    result_preview = tool_result[:250] + "..." if len(tool_result) > 250 else tool_result
+                                    print(f"{Fore.GREEN}Result Preview:\n{Fore.WHITE}{result_preview}")
+
+                                self.messages.append({
+                                    "role": "tool",
+                                    "tool_call_id": tc_id,
+                                    "name": name,
+                                    "content": tool_result
+                                })
+
+                            print(f"{Fore.GREEN}{Style.BRIGHT}Agent > {Style.RESET_ALL}", end="", flush=True)
+
+                        try:
+                            self.messages.append({"role": "assistant", "content": response_content})
+                            self.memory.save(self.messages)
+                        except Exception as e:
+                            print(f"{Fore.RED}Warning: Failed to auto-save history: {e}")
                         continue
                     else:
                         print(f"{Fore.RED}Unknown command: {user_input}. Type '/help' for options.")

@@ -32,6 +32,7 @@ claude-code-agent/
 │   ├── test_main.py    # Main script tests
 │   ├── test_memory.py  # Memory manager tests
 │   ├── test_openai_client.py # OpenAI client tests
+│   ├── test_planner.py # ReAct planning loops tests
 │   ├── test_reader.py  # File reader tests
 │   ├── test_repository.py # Repository walker tests
 │   ├── test_search.py  # Code base search tests
@@ -121,12 +122,14 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
 - **Command Runner**:
   - `/run <command>` - Runs a custom shell command in the workspace, streaming the stdout/stderr live to the terminal.
   - `/test` - Shortcut to execute the Pytest unit testing suite and stream outputs.
-- **Git Integration (Phase 9+)**:
+- **Git Integration**:
   - `/git-status` - Print repository file status (modified, staged, untracked, deleted) highlighted with colors.
   - `/git-commit <message>` - Stages all current modifications and commits them to git.
   - `/git-diff [file]` - Shows unified unstaged diff of files in the workspace.
   - `/git-branch [name]` - Lists branches, highlighting the active branch, or creates a new branch named `name` and checks out.
   - `/git-log [limit]` - Prints the recent commit log history.
+- **Planning Agent (Phase 10+)**:
+  - `/plan <goal>` - Instructs the agent to recursively analyze a multi-stage goal, layout an implementation list in `plan.md` in the root workspace, and execute it autonomously using the ReAct (Reasoning and Acting) framework.
 
 ---
 
@@ -138,11 +141,21 @@ When typing normal messages (without slash commands) in the chat prompt, the age
 2. **`write_file(path, content)`**: Writes code/text to a file, making a session rollback backup.
 3. **`search_files(query, is_regex)`**: Searches the project files for strings or patterns.
 4. **`list_directory(path)`**: Lists files and folders in a tree format.
-5. **`run_command(command)`**: Runs a shell command on the host securely, streaming results to the user (restricted by safety blocklists).
+5. **`run_command(command)`**: Runs a shell command securely (restricted by safety blocklists).
 6. **`git_status()`**: Returns current repository file status.
-7. **`git_commit(message)`**: Stages all modified files and commits them with the given message.
+7. **`git_commit(message)`**: Stages all modified files and commits them.
 8. **`git_diff(file_path)`**: Returns unstaged diffs.
 9. **`git_log(limit)`**: Lists recent repository commits.
+
+---
+
+## ReAct Planning Loop (Phase 10+)
+
+When you start an autonomous planning session using `/plan <goal>`, the agent implements the **ReAct (Reasoning and Acting) Loop**:
+1. **Plan Formulation**: The agent identifies the sub-tasks required to achieve the goal and writes them to a persistent file named `plan.md` in the repository root.
+2. **Autonomous Tool Selection**: In a loop (allowing up to 12 iterations), the agent reads files, searches symbols, runs commands, or updates files.
+3. **Observation & Plan Tracking**: The agent updates `plan.md` checkmarks (e.g. marking `[ ]` as `[x]`) as it finishes tasks.
+4. **Result Summary**: Once all checkboxes are checked, the loop exits and prints a completion report.
 
 ---
 
