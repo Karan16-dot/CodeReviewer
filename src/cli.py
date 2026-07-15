@@ -8,6 +8,7 @@ from repository import RepositoryExplorer
 from reader import FileReader
 from search import CodeSearcher
 from editor import FileEditor
+from tools import tool_registry
 
 # Initialize colorama for colored CLI output
 init(autoreset=True)
@@ -21,6 +22,7 @@ class InteractiveCLI:
         self.memory = ConversationMemory()
         self.file_reader = FileReader()
         self.file_editor = FileEditor()
+        self.tool_registry = tool_registry
         self.system_prompt = "You are Claude Code Agent, a helpful AI programming assistant."
 
     def initialize_client(self):
@@ -484,15 +486,78 @@ class InteractiveCLI:
 
                 print(f"{Fore.GREEN}{Style.BRIGHT}Agent > {Style.RESET_ALL}", end="", flush=True)
 
-                response_content = ""
-                # Stream the response
-                for chunk in self.client.stream_chat(self.messages):
-                    print(chunk, end="", flush=True)
-                    response_content += chunk
-                print()  # Add a newline at the end of the stream
+                loop_count = 0
+                max_loops = 5  # Prevent infinite tool call loops
 
-                self.messages.append({"role": "assistant", "content": response_content})
-                print()  # Spacer
+                while loop_count < max_loops:
+                    loop_count += 1
+                    tool_calls = None
+                    response_content = ""
+
+                    # Stream chat with tools registered
+                    stream = self.client.stream_chat(self.messages, tools=self.tool_registry.schemas)
+
+                    for event in stream:
+                        if isinstance(event, str):
+                            print(event, end="", flush=True)
+                            response_content += event
+                        elif isinstance(event, dict) and event.get("type") == "tool_calls":
+                            tool_calls = event["calls"]
+
+                    # If no tool calls, append the assistant response and break the loop
+                    if not tool_calls:
+                        if response_content:
+                            self.messages.append({"role": "assistant", "content": response_content})
+                        break
+
+                    # Format tool calls in history
+                    api_tool_calls = []
+                    for tc in tool_calls:
+                        api_tool_calls.append({
+                            "id": tc["id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["name"],
+                                "arguments": tc["arguments"]
+                            }
+                        })
+
+                    self.messages.append({
+                        "role": "assistant",
+                        "content": response_content or None,
+                        "tool_calls": api_tool_calls
+                    })
+
+                    # Execute each tool call
+                    for tc in tool_calls:
+                        name = tc["name"]
+                        args_str = tc["arguments"]
+                        tc_id = tc["id"]
+
+                        import json
+                        try:
+                            args = json.loads(args_str) if args_str else {}
+                        except json.JSONDecodeError as e:
+                            print(f"\n{Fore.RED}Failed to parse tool arguments for '{name}': {args_str} ({e})")
+                            tool_result = f"Error: Invalid arguments JSON: {e}"
+                            args = {}
+                        else:
+                            args_formatted = ", ".join(f"{k}={repr(v)}" for k, v in args.items())
+                            print(f"\n{Fore.YELLOW}{Style.BRIGHT}⚙ Tool Run: {Fore.CYAN}{name}({args_formatted})")
+
+                            tool_result = self.tool_registry.execute(name, args)
+                            result_preview = tool_result[:250] + "..." if len(tool_result) > 250 else tool_result
+                            print(f"{Fore.GREEN}Result Preview:\n{Fore.WHITE}{result_preview}")
+
+                        self.messages.append({
+                            "role": "tool",
+                            "tool_call_id": tc_id,
+                            "name": name,
+                            "content": tool_result
+                        })
+
+                    # Print header for subsequent response turn
+                    print(f"{Fore.GREEN}{Style.BRIGHT}Agent > {Style.RESET_ALL}", end="", flush=True)
 
                 # Save history to memory file
                 try:

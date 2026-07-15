@@ -20,7 +20,9 @@ claude-code-agent/
 │   ├── editor.py       # Safe file modification manager
 │   ├── memory.py       # Conversation memory storage
 │   ├── reader.py       # File reader and token counter
-│   └── repository.py   # Repository filesystem walker
+│   ├── repository.py   # Repository filesystem walker
+│   ├── search.py       # Code base search and static analyzer
+│   └── tools.py        # Workspace agent tools and registry
 ├── tests/              # Pytest unit testing suite
 │   ├── test_editor.py  # Editor modification tests
 │   ├── test_main.py    # Main script tests
@@ -28,7 +30,8 @@ claude-code-agent/
 │   ├── test_openai_client.py # OpenAI client tests
 │   ├── test_reader.py  # File reader tests
 │   ├── test_repository.py # Repository walker tests
-│   └── test_search.py  # Code base search tests
+│   ├── test_search.py  # Code base search tests
+│   └── test_tools.py   # Workspace agent tools tests
 ├── .env.example        # Environment variable configuration template
 ├── .gitignore          # Git exclusion rules
 ├── main.py             # CLI entry point
@@ -111,6 +114,24 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/replace <file>` - Launches interactive search-and-replace prompts, displays a color-coded unified diff preview, and asks for confirmation before writing changes.
   - `/diff <file>` - Shows current modifications made to `file` in this session compared to its original backup.
   - `/undo <file>` - Rolls back session changes and restores `file` to its original backed-up state.
+
+---
+
+## Agent Function Calling (Phase 7+)
+
+When typing normal messages (without slash commands) in the chat prompt, the agent has access to several local tools. The model can automatically choose to call one or more of these functions to fulfill your request:
+
+1. **`read_file(path)`**: Retrieves text content from a file.
+2. **`write_file(path, content)`**: Writes code/text to a file, making a session rollback backup.
+3. **`search_files(query, is_regex)`**: Searches the project files for strings or patterns.
+4. **`list_directory(path)`**: Lists files and folders in a tree format.
+5. **`run_command(command)`**: Runs a shell command on the host (with a 30s timeout).
+
+### Execution Loop
+The CLI implements an autonomous **Think-Act-Observe** reasoning loop. When the model invokes a tool:
+1. The CLI interceptor halts output, parses arguments, and prints the tool invocation.
+2. It executes the tool locally and shows a snippet of the result.
+3. It pushes the result back to the model, allowing it to repeat reasoning or finalize the answer.
 
 ---
 
