@@ -145,6 +145,10 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/finetune start <file_id>` - Initiates an OpenAI model fine-tuning job.
   - `/finetune status <job_id>` - Retrieves status and details of a fine-tuning job.
   - `/finetune list` - Lists recent OpenAI fine-tuning jobs.
+- **Telemetry & Performance (Phase 16+)**:
+  - `/telemetry show` - Prints aggregate usage and execution duration metrics.
+  - `/telemetry export <dest_path>` - Saves telemetry events to a JSON file.
+  - `/telemetry clear` - Purges the local telemetry database table.
 
 ---
 
@@ -221,6 +225,15 @@ The fine-tuning framework allows exporting local agent knowledge to optimize cus
 1. **Training Data Prep (`FineTuningDataPreparer`)**: Exports relational conversation logs stored in SQLite to OpenAI's JSON Lines (JSONL) training format. It filters incomplete sessions (requiring at least one user and one assistant message) and maps tool call properties.
 2. **Lifecycle Manager (`FineTuningManager`)**: Interfaces with the OpenAI API files and fine-tuning endpoints to handle training file uploads, start training jobs, retrieve live progress metrics, and list job histories.
 3. **Custom Model Inference**: Set the environment variable `OPENAI_MODEL` in your `.env` (e.g. `OPENAI_MODEL=ft:gpt-3.5-turbo-0125:your-org:custom-suffix:model`) to redirect agent queries to utilize your custom fine-tuned model.
+
+---
+
+## Telemetry Logging & Performance Monitoring (Phase 16+)
+
+The telemetry engine records operational metrics of the agent execution lifecycle:
+1. **Telemetry Tracker (`TelemetryTracker`)**: Inserts performance metrics inside relational tables in `logs/memory.db`. It logs LLM chat query durations, tool call executions (duration, success status, and parameters), and shell command executions (duration, exit code).
+2. **PII and Key Redactions**: Recursively sanitizes logged event arguments by identifying keys containing `"key"`, `"password"`, `"secret"`, `"token"`, or `"auth"` and replacing their values with `"[REDACTED]"`. Metric counters containing `"prompt_tokens"` or `"completion_tokens"` are explicitly preserved.
+3. **Analytics Dashboard & Log Exports**: Exposes operations to calculate token usage aggregates, command averages, tool call frequencies, and tool success rates. Enables exporting logs as pretty JSON outputs.
 
 ---
 

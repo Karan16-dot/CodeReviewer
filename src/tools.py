@@ -30,12 +30,27 @@ class ToolRegistry:
         """Executes a registered function with arguments and returns result as string."""
         if name not in self.tools:
             return f"Error: Tool '{name}' is not registered."
+        import time
+        from telemetry import TelemetryTracker
+        start_time = time.time()
+        success = True
         try:
-            return str(self.tools[name](**arguments))
+            res = str(self.tools[name](**arguments))
+            return res
         except TypeError as e:
+            success = False
             return f"Error invoking tool '{name}': {e}"
         except Exception as e:
+            success = False
             return f"Error executing tool '{name}': {e}"
+        finally:
+            duration = time.time() - start_time
+            TelemetryTracker.log_tool_call(
+                tool_name=name,
+                arguments=arguments,
+                duration=duration,
+                success=success
+            )
 
 
 # Instantiate global helper services

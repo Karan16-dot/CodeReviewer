@@ -718,6 +718,55 @@ class InteractiveCLI:
                         except Exception as e:
                             print(f"{Fore.RED}Log failed: {e}")
                         continue
+                    elif cmd == "/telemetry":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Usage: /telemetry <action> [parameter]\n"
+                                  f"Actions: show, export <dest_path>, clear")
+                            continue
+
+                        sub_parts = path_arg.split(maxsplit=1)
+                        action = sub_parts[0].lower().strip()
+                        param = sub_parts[1].strip() if len(sub_parts) > 1 else ""
+
+                        try:
+                            from telemetry import TelemetryTracker
+
+                            if action == "show":
+                                metrics = TelemetryTracker.get_metrics()
+                                print(f"\n{Fore.GREEN}{Style.BRIGHT}=== Telemetry & Performance Reports ===")
+                                print(f"{Fore.YELLOW}{Style.BRIGHT}[LLM Queries Metrics]")
+                                print(f"  Total Calls: {Fore.WHITE}{metrics['llm']['total_calls']}")
+                                print(f"  Total Tokens (Est): {Fore.WHITE}{metrics['llm']['total_tokens']} (Prompt: {metrics['llm']['prompt_tokens']}, Completion: {metrics['llm']['completion_tokens']})")
+                                print(f"  Average Duration: {Fore.WHITE}{metrics['llm']['average_duration']:.2f}s")
+                                print()
+                                print(f"{Fore.YELLOW}{Style.BRIGHT}[Agent Tool Runs]")
+                                print(f"  Total Invocations: {Fore.WHITE}{metrics['tools']['total_calls']}")
+                                print(f"  Tool Success Rate: {Fore.WHITE}{metrics['tools']['success_rate']:.1f}%")
+                                print(f"  Average Execution: {Fore.WHITE}{metrics['tools']['average_duration']:.2f}s")
+                                print(f"  Call Frequencies:")
+                                for tname, freq in metrics["tools"]["frequencies"].items():
+                                    print(f"    - {Fore.CYAN}{tname}{Fore.RESET}: {Fore.WHITE}{freq} runs")
+                                print()
+                                print(f"{Fore.YELLOW}{Style.BRIGHT}[Command Runs]")
+                                print(f"  Total Runs: {Fore.WHITE}{metrics['commands']['total_runs']}")
+                                print(f"  Average Execution: {Fore.WHITE}{metrics['commands']['average_duration']:.2f}s")
+                                print(f"{Fore.GREEN}{Style.BRIGHT}========================================\n")
+                            elif action == "export":
+                                if not param:
+                                    print(f"{Fore.RED}Please specify a destination path. E.g. /telemetry export telemetry.json")
+                                    continue
+                                print(f"\n{Fore.YELLOW}Exporting telemetry database to JSON file...")
+                                count = TelemetryTracker.export_telemetry(Path(param))
+                                print(f"{Fore.GREEN}Successfully exported {count} telemetry event logs to: {param}")
+                            elif action == "clear":
+                                print(f"\n{Fore.YELLOW}Purging telemetry database...")
+                                TelemetryTracker.clear_telemetry()
+                                print(f"{Fore.GREEN}Telemetry database cleared.")
+                            else:
+                                print(f"{Fore.RED}Unknown action: {action}. Available: show, export, clear")
+                        except Exception as e:
+                            print(f"{Fore.RED}Telemetry action failed: {e}")
+                        continue
                     elif cmd == "/finetune":
                         if path_arg == "." or not path_arg:
                             print(f"{Fore.RED}Usage: /finetune <action> [parameter]\n"

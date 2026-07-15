@@ -97,6 +97,10 @@ class CommandRunner:
         if venv_bin.exists():
             env["PATH"] = str(venv_bin) + os.pathsep + env.get("PATH", "")
 
+        import time
+        from telemetry import TelemetryTracker
+        start_time = time.time()
+        exit_code = 0
         try:
             res = subprocess.run(
                 command,
@@ -108,10 +112,16 @@ class CommandRunner:
                 env=env,
                 timeout=timeout
             )
+            exit_code = res.returncode
             return res.stdout, res.stderr, res.returncode
         except subprocess.TimeoutExpired as e:
+            exit_code = 1
             stdout = e.stdout if isinstance(e.stdout, str) else ""
             stderr = e.stderr if isinstance(e.stderr, str) else ""
             return stdout, stderr + "\nError: Process timed out.", 1
         except Exception as e:
+            exit_code = 1
             return "", f"Error running command: {e}", 1
+        finally:
+            duration = time.time() - start_time
+            TelemetryTracker.log_command(command, duration=duration, exit_code=exit_code)

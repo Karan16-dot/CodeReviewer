@@ -30,6 +30,15 @@ class OpenAIClient(LLMClient):
         Yields:
             Token content chunks (str) or a tool call dictionary block (dict).
         """
+        import time
+        from telemetry import TelemetryTracker
+        start_time = time.time()
+
+        # Estimate prompt tokens (roughly 1 token per 4 characters as a reliable proxy)
+        prompt_content_len = sum(len(m.get("content", "")) for m in messages)
+        prompt_tokens_est = max(1, prompt_content_len // 4)
+
+        response_content = ""
         try:
             kwargs = {
                 "model": self.model,
@@ -67,13 +76,25 @@ class OpenAIClient(LLMClient):
                                 tool_calls_accum[idx]["arguments"] += tc.function.arguments
 
                 if delta.content is not None:
+                    response_content += delta.content
                     yield delta.content
 
             if tool_calls_accum:
+                for call in tool_calls_accum.values():
+                    response_content += call.get("name", "") + call.get("arguments", "")
                 yield {
                     "type": "tool_calls",
                     "calls": list(tool_calls_accum.values())
                 }
+
+            duration = time.time() - start_time
+            completion_tokens_est = max(1, len(response_content) // 4)
+            TelemetryTracker.log_llm_call(
+                self.model,
+                prompt_tokens=prompt_tokens_est,
+                completion_tokens=completion_tokens_est,
+                duration=duration
+            )
 
         except OpenAIError as e:
             raise LLMError(f"OpenAI API failure: {e}")
