@@ -17,11 +17,13 @@ claude-code-agent/
 │   │   └── openai_client.py # OpenAI SDK client implementation
 │   ├── cli.py          # Interactive console chat interface
 │   ├── memory.py       # Conversation memory storage
+│   ├── reader.py       # File reader and token counter
 │   └── repository.py   # Repository filesystem walker
 ├── tests/              # Pytest unit testing suite
 │   ├── test_main.py    # Main script tests
 │   ├── test_memory.py  # Memory manager tests
 │   ├── test_openai_client.py # OpenAI client tests
+│   ├── test_reader.py  # File reader tests
 │   └── test_repository.py # Repository walker tests
 ├── .env.example        # Environment variable configuration template
 ├── .gitignore          # Git exclusion rules
@@ -80,7 +82,7 @@ python main.py
 
 ### CLI Slash Commands
 
-You can manage your session, view statistics, and scan directory trees using built-in slash commands in the CLI chat prompt:
+You can manage your session, view statistics, scan directory trees, and read/explain files using built-in slash commands in the CLI chat prompt:
 
 - **Help Menu**:
   - `/help` - Show all available CLI instructions.
@@ -90,6 +92,11 @@ You can manage your session, view statistics, and scan directory trees using bui
 - **Repository Explorer**:
   - `/scan [path]` - Scan directory contents, ignore development directories (`.git`, `venv`, `node_modules`), show file statistics, and detect language breakdown.
   - `/tree [path]` - Generate and print a text-based visual tree diagram of the directories and files (ignores system and cache directories).
+- **Code Reader**:
+  - `/read <file>` - Reads a file and prints its contents with line numbers and token stats.
+  - `/explain <file>` - Sends a file to the LLM to get a structured explanation (handles large files using token chunking).
+  - `/summarize` - Bundles project tree structure and documentation to get an architectural summary from the LLM.
+  - `/entrypoint` - Analyses the project and suggests candidate application starting points.
 
 ---
 
