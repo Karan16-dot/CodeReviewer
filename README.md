@@ -237,6 +237,16 @@ The telemetry engine records operational metrics of the agent execution lifecycl
 
 ---
 
+## Plugin Extensibility Architecture (Phase 17+)
+
+The agent supports custom features via third-party plugins loaded dynamically at runtime:
+1. **Plugin Interface (`BasePlugin`)**: Plugins extend the agent by subclassing `BasePlugin` and overriding:
+   - `get_commands()`: Returns a dictionary mapping custom CLI slash commands (e.g. `/my-cmd`) to python execution callbacks.
+   - `get_tools()`: Returns custom agent tool functions and parameters schemas to register into the global `tool_registry`.
+2. **Dynamic Loader (`PluginManager`)**: Scans the workspace `plugins/` directory on CLI startup. It loads standalone python files (`my_plugin.py`) or python packages containing `__init__.py` using importlib spec loaders, discovers `BasePlugin` subclasses, and instantiates them dynamically.
+
+---
+
 ### Running Tests
 
 Execute the test suite using `pytest`:

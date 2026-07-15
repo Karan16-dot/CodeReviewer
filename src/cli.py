@@ -19,6 +19,7 @@ class InteractiveCLI:
 
     def __init__(self):
         from safety import SecurityPolicy
+        from plugin_manager import PluginManager
         self.messages = []
         self.client = None
         self.memory = ConversationMemory()
@@ -27,6 +28,8 @@ class InteractiveCLI:
         self.file_reader = FileReader()
         self.file_editor = FileEditor()
         self.tool_registry = tool_registry
+        self.plugin_manager = PluginManager(plugins_dir="plugins", tool_registry=self.tool_registry)
+        self.plugin_manager.load_plugins()
         self.system_prompt = "You are Claude Code Agent, a helpful AI programming assistant."
 
     def initialize_client(self):
@@ -954,7 +957,17 @@ class InteractiveCLI:
                             print(f"{Fore.RED}Warning: Failed to auto-save history: {e}")
                         continue
                     else:
-                        print(f"{Fore.RED}Unknown command: {user_input}. Type '/help' for options.")
+                        # Check if it is a dynamic plugin command
+                        plugin_handler = self.plugin_manager.get_command(cmd)
+                        if plugin_handler:
+                            try:
+                                res = plugin_handler(path_arg)
+                                if res:
+                                    print(f"{Fore.GREEN}{res}")
+                            except Exception as e:
+                                print(f"{Fore.RED}Plugin command execution failed: {e}")
+                        else:
+                            print(f"{Fore.RED}Unknown command: {user_input}. Type '/help' for options.")
                         continue
 
                 self.messages.append({"role": "user", "content": user_input})
