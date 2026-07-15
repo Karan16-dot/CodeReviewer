@@ -139,6 +139,12 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/memory <query>` - Searches long-term session database and vector embeddings index semantically, returning matched entries.
 - **Self-Correction Loop (Phase 13+)**:
   - `/correct <command>` - Runs a command. If execution fails, initiates an autonomous loop parsing tracebacks, reading line contexts, querying the LLM for corrections, applying updates, and retrying.
+- **Model Fine-Tuning (Phase 15+)**:
+  - `/finetune prepare <output_path>` - Exports structured SQLite database conversation histories to JSONL format.
+  - `/finetune upload <file_path>` - Uploads a training dataset JSONL file to OpenAI.
+  - `/finetune start <file_id>` - Initiates an OpenAI model fine-tuning job.
+  - `/finetune status <job_id>` - Retrieves status and details of a fine-tuning job.
+  - `/finetune list` - Lists recent OpenAI fine-tuning jobs.
 
 ---
 
@@ -158,6 +164,8 @@ When typing normal messages (without slash commands) in the chat prompt, the age
 10. **`recall_memory(query, limit)`**: Programmatically recall past conversation history or user preferences semantically.
 11. **`apply_refactor(edits, validate)`**: Applies search-and-replace block changes across multiple files atomically. If validation checks fail, rolls back all changes.
 12. **`run_with_self_correction(command, max_retries)`**: Runs a verification command (e.g. pytest). If it fails, parses the traceback, queries the LLM for corrections, applies patches, and retries.
+13. **`prepare_finetuning_data(output_path)`**: Exports conversations from the SQLite log history to a JSON Lines (JSONL) file for model fine-tuning.
+14. **`manage_finetuning(action, param)`**: Performs actions against the OpenAI Fine-Tuning endpoints (upload, start, status, list).
 
 ---
 
@@ -204,6 +212,15 @@ The autonomous self-correction loop is designed to automatically detect and repa
 1. **Traceback Parsing (`TracebackParser`)**: Scans console output logs (stdout/stderr) for Python traceback markers (`File "...", line ...`). It isolates the source file path and line number of the error location while automatically skipping external standard library modules.
 2. **Context Gathering & LLM Correction**: Reads a line context window (e.g. 10 lines) around the error location. It presents the error trace and code window to the LLM, prompting it to produce a targeted search-and-replace patch.
 3. **Execution Retries (`SelfCorrectionOrchestrator`)**: Applies the search-and-replace edit to the file on disk and re-runs the verification command. The loop repeats (up to 3 retries) until the exit code is 0 (success) or retries are exhausted.
+
+---
+
+## Model Fine-Tuning & Custom Models (Phase 15+)
+
+The fine-tuning framework allows exporting local agent knowledge to optimize custom models on OpenAI:
+1. **Training Data Prep (`FineTuningDataPreparer`)**: Exports relational conversation logs stored in SQLite to OpenAI's JSON Lines (JSONL) training format. It filters incomplete sessions (requiring at least one user and one assistant message) and maps tool call properties.
+2. **Lifecycle Manager (`FineTuningManager`)**: Interfaces with the OpenAI API files and fine-tuning endpoints to handle training file uploads, start training jobs, retrieve live progress metrics, and list job histories.
+3. **Custom Model Inference**: Set the environment variable `OPENAI_MODEL` in your `.env` (e.g. `OPENAI_MODEL=ft:gpt-3.5-turbo-0125:your-org:custom-suffix:model`) to redirect agent queries to utilize your custom fine-tuned model.
 
 ---
 

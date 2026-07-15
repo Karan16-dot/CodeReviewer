@@ -718,6 +718,71 @@ class InteractiveCLI:
                         except Exception as e:
                             print(f"{Fore.RED}Log failed: {e}")
                         continue
+                    elif cmd == "/finetune":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Usage: /finetune <action> [parameter]\n"
+                                  f"Actions: prepare <output_path>, upload <file_path>, start <file_id>, status <job_id>, list")
+                            continue
+
+                        sub_parts = path_arg.split(maxsplit=1)
+                        action = sub_parts[0].lower().strip()
+                        param = sub_parts[1].strip() if len(sub_parts) > 1 else ""
+
+                        try:
+                            from finetuning import FineTuningDataPreparer, FineTuningManager
+                            manager = FineTuningManager(client=self.client)
+                            db_path = Path("logs/memory.db")
+
+                            if action == "prepare":
+                                if not param:
+                                    print(f"{Fore.RED}Please specify output file path. E.g. /finetune prepare train.jsonl")
+                                    continue
+                                print(f"\n{Fore.YELLOW}Exporting SQLite chat history to JSONL...")
+                                count = FineTuningDataPreparer.export_to_jsonl(db_path, Path(param))
+                                print(f"{Fore.GREEN}Successfully prepared training file: {param} (Exported {count} conversations).")
+                            elif action == "upload":
+                                if not param:
+                                    print(f"{Fore.RED}Please specify file path to upload. E.g. /finetune upload train.jsonl")
+                                    continue
+                                print(f"\n{Fore.YELLOW}Uploading training file to OpenAI...")
+                                file_id = manager.upload_file(Path(param))
+                                print(f"{Fore.GREEN}Uploaded successfully! File ID: {Fore.CYAN}{file_id}")
+                            elif action == "start":
+                                if not param:
+                                    print(f"{Fore.RED}Please specify OpenAI File ID. E.g. /finetune start file-XYZ")
+                                    continue
+                                print(f"\n{Fore.YELLOW}Launching fine-tuning job on OpenAI...")
+                                job_id = manager.start_job(param)
+                                print(f"{Fore.GREEN}Job created! Job ID: {Fore.CYAN}{job_id}")
+                            elif action == "status":
+                                if not param:
+                                    print(f"{Fore.RED}Please specify Job ID. E.g. /finetune status ftjob-XYZ")
+                                    continue
+                                print(f"\n{Fore.YELLOW}Querying fine-tuning job status...")
+                                info = manager.get_job_status(param)
+                                print(f"\n{Fore.GREEN}{Style.BRIGHT}=== Job Status Details ===")
+                                print(f"  Job ID: {Fore.WHITE}{info['id']}")
+                                print(f"  Status: {Fore.CYAN}{info['status']}")
+                                print(f"  Base Model: {Fore.WHITE}{info['base_model']}")
+                                print(f"  Fine-Tuned Model: {Fore.GREEN}{info['fine_tuned_model']}")
+                                print(f"  Trained Tokens: {Fore.WHITE}{info['trained_tokens']}")
+                                print(f"  Created At: {Fore.WHITE}{info['created_at']}")
+                                print(f"{Fore.GREEN}{Style.BRIGHT}===========================\n")
+                            elif action == "list":
+                                print(f"\n{Fore.YELLOW}Listing recent fine-tuning jobs...")
+                                jobs = manager.list_jobs()
+                                if not jobs:
+                                    print(f"{Fore.WHITE}No fine-tuning jobs found.")
+                                else:
+                                    print(f"\n{Fore.GREEN}{Style.BRIGHT}=== OpenAI Fine-Tuning Jobs ===")
+                                    for j in jobs:
+                                        print(f"  {Fore.CYAN}{j['id']}{Fore.RESET} | Status: {Fore.YELLOW}{j['status']}{Fore.RESET} | Model: {Fore.WHITE}{j['fine_tuned_model']}")
+                                    print(f"{Fore.GREEN}{Style.BRIGHT}================================\n")
+                            else:
+                                print(f"{Fore.RED}Unknown action: {action}. Available: prepare, upload, start, status, list")
+                        except Exception as e:
+                            print(f"{Fore.RED}Fine-tuning action failed: {e}")
+                        continue
                     elif cmd == "/memory":
                         if path_arg == "." or not path_arg:
                             print(f"{Fore.RED}Please provide a query for semantic memory search. Usage: /memory <query>")

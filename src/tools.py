@@ -10,6 +10,7 @@ from executor import CommandRunner
 from git_manager import GitManager
 from refactoring import RefactoringTransaction
 from self_correction import SelfCorrectionOrchestrator
+from finetuning import FineTuningDataPreparer, FineTuningManager
 
 class ToolRegistry:
     """Registry that houses tool schemas and handles dispatch of tool invocations."""
@@ -442,3 +443,87 @@ RUN_WITH_SELF_CORRECTION_SCHEMA = {
 }
 
 tool_registry.register("run_with_self_correction", run_with_self_correction, RUN_WITH_SELF_CORRECTION_SCHEMA)
+
+# Fine-Tuning tools implementation
+def prepare_finetuning_data(output_path: str) -> str:
+    """Exports structured SQLite database conversation histories to JSONL format for model fine-tuning."""
+    try:
+        db_path = Path("logs/memory.db")
+        out_path = Path(output_path)
+        count = FineTuningDataPreparer.export_to_jsonl(db_path, out_path)
+        return f"Successfully exported {count} conversations for fine-tuning to: {out_path.name}"
+    except Exception as e:
+        return f"Failed to prepare fine-tuning data: {e}"
+
+
+def manage_finetuning(action: str, param: str = "") -> str:
+    """Manages model fine-tuning jobs (actions: upload, start, status, list)."""
+    try:
+        from llm.openai_client import OpenAIClient
+        client = OpenAIClient()
+        manager = FineTuningManager(client=client)
+
+        act = action.lower().strip()
+        if act == "upload":
+            file_id = manager.upload_file(Path(param))
+            return f"Successfully uploaded file. OpenAI File ID: {file_id}"
+        elif act == "start":
+            job_id = manager.start_job(param)
+            return f"Successfully started fine-tuning job. Job ID: {job_id}"
+        elif act == "status":
+            info = manager.get_job_status(param)
+            return (f"Job ID: {info['id']}\n"
+                    f"Status: {info['status']}\n"
+                    f"Base Model: {info['base_model']}\n"
+                    f"Fine-Tuned Model: {info['fine_tuned_model']}\n"
+                    f"Trained Tokens: {info['trained_tokens']}")
+        elif act == "list":
+            jobs = manager.list_jobs()
+            if not jobs:
+                return "No fine-tuning jobs found."
+            output = []
+            for j in jobs:
+                output.append(f"Job: {j['id']} - Status: {j['status']} - Model: {j['fine_tuned_model']}")
+            return "\n".join(output)
+        else:
+            return f"Unknown fine-tuning action: {action}"
+    except Exception as e:
+        return f"Fine-tuning action failed: {e}"
+
+
+PREPARE_FINETUNING_DATA_SCHEMA = {
+    "name": "prepare_finetuning_data",
+    "description": "Exports conversations from the SQLite log history to a JSON Lines (JSONL) file for model fine-tuning.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "output_path": {
+                "type": "string",
+                "description": "The destination path inside the workspace to save the JSONL file."
+            }
+        },
+        "required": ["output_path"]
+    }
+}
+
+MANAGE_FINETUNING_SCHEMA = {
+    "name": "manage_finetuning",
+    "description": "Performs actions against the OpenAI Fine-Tuning endpoints (upload, start, status, list).",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "action": {
+                "type": "string",
+                "description": "The target API action: 'upload' (upload file), 'start' (initiate job), 'status' (query status), or 'list' (query jobs)."
+            },
+            "param": {
+                "type": "string",
+                "description": "The parameter corresponding to the action (e.g. file path for upload, file ID for start, job ID for status)."
+            }
+        },
+        "required": ["action"]
+    }
+}
+
+tool_registry.register("prepare_finetuning_data", prepare_finetuning_data, PREPARE_FINETUNING_DATA_SCHEMA)
+tool_registry.register("manage_finetuning", manage_finetuning, MANAGE_FINETUNING_SCHEMA)

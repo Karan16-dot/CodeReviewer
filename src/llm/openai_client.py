@@ -13,7 +13,7 @@ class OpenAIClient(LLMClient):
         if not self.api_key:
             raise LLMError("OpenAI API key not found. Please set OPENAI_API_KEY in your environment or .env file.")
 
-        self.model = model
+        self.model = os.getenv("OPENAI_MODEL", model)
         try:
             self.client = OpenAI(api_key=self.api_key)
         except Exception as e:
