@@ -6,6 +6,7 @@ Claude Code Agent is a robust, modular AI coding assistant built feature-by-feat
 
 ```text
 claude-code-agent/
+├── .backup/            # Local temporary file backups for undos
 ├── config/             # App configuration schemas/configs
 ├── docs/               # Technical documentation
 ├── examples/           # Code examples and usage recipes
@@ -16,11 +17,12 @@ claude-code-agent/
 │   │   ├── client.py   # Base client interface
 │   │   └── openai_client.py # OpenAI SDK client implementation
 │   ├── cli.py          # Interactive console chat interface
+│   ├── editor.py       # Safe file modification manager
 │   ├── memory.py       # Conversation memory storage
 │   ├── reader.py       # File reader and token counter
-│   ├── repository.py   # Repository filesystem walker
-│   └── search.py       # Code base search and static analyzer
+│   └── repository.py   # Repository filesystem walker
 ├── tests/              # Pytest unit testing suite
+│   ├── test_editor.py  # Editor modification tests
 │   ├── test_main.py    # Main script tests
 │   ├── test_memory.py  # Memory manager tests
 │   ├── test_openai_client.py # OpenAI client tests
@@ -84,7 +86,7 @@ python main.py
 
 ### CLI Slash Commands
 
-You can manage your session, view statistics, scan directory trees, and read/search/explain files using built-in slash commands in the CLI chat prompt:
+You can manage your session, view statistics, scan directory trees, and edit/explain files using built-in slash commands in the CLI chat prompt:
 
 - **Help Menu**:
   - `/help` - Show all available CLI instructions.
@@ -100,11 +102,15 @@ You can manage your session, view statistics, scan directory trees, and read/sea
   - `/summarize` - Bundles project tree structure and documentation to get an architectural summary from the LLM.
   - `/entrypoint` - Analyses the project and suggests candidate application starting points.
 - **Search Engine**:
-  - `/find <query>` - Searches all non-ignored files for keyword matches (case-insensitive literal match).
+  - `/find <query>` - Searches all non-ignored files for keyword matches.
   - `/grep <regex>` - Searches files for lines matching regular expression patterns.
   - `/todo` - Scans all project files for `TODO`, `FIXME`, `HACK`, or `BUG` comments.
-  - `/symbols [file]` - Uses AST parsing to list Python class and function/method definitions across the workspace (or in a specific file).
+  - `/symbols [file]` - Uses AST parsing to list Python class and function definitions across the workspace (or in a specific file).
   - `/bugs` - Performs static analysis on Python files using AST traversal to flag empty `except` handlers or unsafe dynamic execution functions (`eval`/`exec`).
+- **File Editing**:
+  - `/replace <file>` - Launches interactive search-and-replace prompts, displays a color-coded unified diff preview, and asks for confirmation before writing changes.
+  - `/diff <file>` - Shows current modifications made to `file` in this session compared to its original backup.
+  - `/undo <file>` - Rolls back session changes and restores `file` to its original backed-up state.
 
 ---
 

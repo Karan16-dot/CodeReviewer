@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 from colorama import init, Fore, Style
 from llm.openai_client import OpenAIClient
 from llm.client import LLMError
@@ -6,6 +7,7 @@ from memory import ConversationMemory
 from repository import RepositoryExplorer
 from reader import FileReader
 from search import CodeSearcher
+from editor import FileEditor
 
 # Initialize colorama for colored CLI output
 init(autoreset=True)
@@ -18,6 +20,7 @@ class InteractiveCLI:
         self.client = None
         self.memory = ConversationMemory()
         self.file_reader = FileReader()
+        self.file_editor = FileEditor()
         self.system_prompt = "You are Claude Code Agent, a helpful AI programming assistant."
 
     def initialize_client(self):
@@ -28,6 +31,21 @@ class InteractiveCLI:
             print(f"{Fore.RED}Configuration Error: {e}")
             print(f"{Fore.YELLOW}Please configure your OPENAI_API_KEY in the environment or a .env file.")
             sys.exit(1)
+
+    def get_multiline_input(self, prompt_label: str) -> str:
+        """Helper to collect multi-line text input from the console, terminated by 'END'."""
+        print(f"{Fore.YELLOW}{prompt_label} (Type 'END' on a line by itself to finish):")
+        lines = []
+        while True:
+            try:
+                line = input()
+                if line.strip() == "END":
+                    break
+                lines.append(line)
+            except KeyboardInterrupt:
+                print(f"\n{Fore.YELLOW}Input cancelled.")
+                raise KeyboardInterrupt()
+        return "\n".join(lines)
 
     def print_help(self):
         """Prints available slash commands."""
@@ -44,6 +62,9 @@ class InteractiveCLI:
         print(f"  {Fore.CYAN}/todo{Fore.RESET}               - List all TODO, FIXME, HACK, and BUG comments")
         print(f"  {Fore.CYAN}/symbols [file]{Fore.RESET}     - Extract classes and functions in Python files")
         print(f"  {Fore.CYAN}/bugs{Fore.RESET}               - Audit Python AST for empty catches or unsafe evals")
+        print(f"  {Fore.CYAN}/replace <file>{Fore.RESET}     - Interactively replace a block of code in a file")
+        print(f"  {Fore.CYAN}/diff <file>{Fore.RESET}        - Show the session changes made to a file")
+        print(f"  {Fore.CYAN}/undo <file>{Fore.RESET}        - Roll back session changes made to a file")
         print(f"  {Fore.CYAN}/history{Fore.RESET}            - Print current conversation history")
         print(f"  {Fore.CYAN}/clear{Fore.RESET}              - Delete memory and start a new chat")
         print(f"  {Fore.CYAN}/delete{Fore.RESET}             - Same as /clear")
@@ -341,6 +362,119 @@ class InteractiveCLI:
                             print()
                         except Exception as e:
                             print(f"{Fore.RED}Bug scan failed: {e}")
+                        continue
+                    elif cmd == "/replace":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a target file. Usage: /replace <file>")
+                            continue
+                        try:
+                            file_path = Path(path_arg).resolve()
+                            if not file_path.exists():
+                                print(f"{Fore.RED}File not found: {path_arg}")
+                                continue
+
+                            print(f"{Fore.CYAN}--- Search Block ---")
+                            search_block = self.get_multiline_input("Enter block to search")
+                            if not search_block:
+                                print(f"{Fore.RED}Search block cannot be empty. Aborted.")
+                                continue
+
+                            print(f"\n{Fore.CYAN}--- Replacement Block ---")
+                            replace_block = self.get_multiline_input("Enter replacement block")
+
+                            new_content = self.file_editor.apply_replacement(file_path, search_block, replace_block)
+                            diff_str = self.file_editor.get_diff(file_path, new_content)
+
+                            if not diff_str:
+                                print(f"{Fore.YELLOW}No changes would be made.")
+                                continue
+
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}--- Proposed Changes Diff ---")
+                            for line in diff_str.splitlines():
+                                if line.startswith("+"):
+                                    print(f"{Fore.GREEN}{line}")
+                                elif line.startswith("-"):
+                                    print(f"{Fore.RED}{line}")
+                                elif line.startswith("@@"):
+                                    print(f"{Fore.CYAN}{line}")
+                                else:
+                                    print(f"{Fore.WHITE}{line}")
+                            print(f"{Fore.GREEN}{Style.BRIGHT}------------------------------\n")
+
+                            confirm = input(f"{Fore.YELLOW}Apply these changes? (y/N): ").strip().lower()
+                            if confirm in ["y", "yes"]:
+                                self.file_editor.write(file_path, new_content)
+                                print(f"{Fore.GREEN}Changes applied successfully.")
+                            else:
+                                print(f"{Fore.YELLOW}Changes aborted.")
+                        except Exception as e:
+                            print(f"{Fore.RED}Replacement failed: {e}")
+                        continue
+                    elif cmd == "/diff":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a file name. Usage: /diff <file>")
+                            continue
+                        try:
+                            file_path = Path(path_arg).resolve()
+                            backup_path = self.file_editor.backups.get(str(file_path))
+
+                            if str(file_path) not in self.file_editor.backups:
+                                print(f"{Fore.YELLOW}No edit history found for {path_arg} in this session.")
+                                continue
+
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                current_content = f.read()
+
+                            original_content = ""
+                            if backup_path and backup_path.exists():
+                                with open(backup_path, "r", encoding="utf-8") as f:
+                                    original_content = f.read()
+
+                            diff_str = self.file_editor.get_diff(file_path, current_content)
+
+                            # Re-read from backup to get true diff comparing backup to current
+                            import difflib
+                            original_lines = original_content.splitlines(keepends=True)
+                            current_lines = current_content.splitlines(keepends=True)
+                            diff = difflib.unified_diff(
+                                original_lines,
+                                current_lines,
+                                fromfile=f"a/{file_path.name}",
+                                tofile=f"b/{file_path.name}",
+                                lineterm=""
+                            )
+                            diff_str = "\n".join(diff)
+
+                            if not diff_str:
+                                print(f"{Fore.YELLOW}No differences found.")
+                            else:
+                                print(f"\n{Fore.GREEN}{Style.BRIGHT}--- Session Diff for {path_arg} ---")
+                                for line in diff_str.splitlines():
+                                    if line.startswith("+"):
+                                        print(f"{Fore.GREEN}{line}")
+                                    elif line.startswith("-"):
+                                        print(f"{Fore.RED}{line}")
+                                    elif line.startswith("@@"):
+                                        print(f"{Fore.CYAN}{line}")
+                                    else:
+                                        print(f"{Fore.WHITE}{line}")
+                                print(f"{Fore.GREEN}{Style.BRIGHT}------------------------------------\n")
+                        except Exception as e:
+                            print(f"{Fore.RED}Failed to compute diff: {e}")
+                        continue
+                    elif cmd == "/undo":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a file name. Usage: /undo <file>")
+                            continue
+                        try:
+                            file_path = Path(path_arg).resolve()
+                            success = self.file_editor.undo(file_path)
+                            if success:
+                                print(f"{Fore.GREEN}Successfully rolled back changes to {path_arg}.")
+                            else:
+                                print(f"{Fore.YELLOW}No backup found for {path_arg} in this session.")
+                        except Exception as e:
+                            print(f"{Fore.RED}Undo failed: {e}")
                         continue
                     else:
                         print(f"{Fore.RED}Unknown command: {user_input}. Type '/help' for options.")

@@ -60,3 +60,6 @@ logs/
 
 # Chat History
 messages.json
+
+# Editor backups
+.backup/
