@@ -5,6 +5,7 @@ from llm.client import LLMError
 from memory import ConversationMemory
 from repository import RepositoryExplorer
 from reader import FileReader
+from search import CodeSearcher
 
 # Initialize colorama for colored CLI output
 init(autoreset=True)
@@ -38,6 +39,11 @@ class InteractiveCLI:
         print(f"  {Fore.CYAN}/explain <file>{Fore.RESET}     - Stream an LLM explanation of the specified file")
         print(f"  {Fore.CYAN}/summarize{Fore.RESET}          - Stream an LLM summary of the repository architecture")
         print(f"  {Fore.CYAN}/entrypoint{Fore.RESET}         - Search and suggest main application entry points")
+        print(f"  {Fore.CYAN}/find <query>{Fore.RESET}       - Search for a keyword across workspace files")
+        print(f"  {Fore.CYAN}/grep <regex>{Fore.RESET}       - Search for regex matches across workspace files")
+        print(f"  {Fore.CYAN}/todo{Fore.RESET}               - List all TODO, FIXME, HACK, and BUG comments")
+        print(f"  {Fore.CYAN}/symbols [file]{Fore.RESET}     - Extract classes and functions in Python files")
+        print(f"  {Fore.CYAN}/bugs{Fore.RESET}               - Audit Python AST for empty catches or unsafe evals")
         print(f"  {Fore.CYAN}/history{Fore.RESET}            - Print current conversation history")
         print(f"  {Fore.CYAN}/clear{Fore.RESET}              - Delete memory and start a new chat")
         print(f"  {Fore.CYAN}/delete{Fore.RESET}             - Same as /clear")
@@ -167,8 +173,6 @@ class InteractiveCLI:
 
                             print(f"\n{Fore.YELLOW}Reading {path_arg} ({len(content)} chars, {tokens} tokens) for explanation...")
 
-                            # Check if code requires token chunking
-                            # If larger than 3000 tokens, let the user know we chunk it
                             if tokens > 3000:
                                 print(f"{Fore.YELLOW}File is large ({tokens} tokens). Explaining in chunks...")
                                 chunks = self.file_reader.chunk_text(content, max_tokens=3000)
@@ -190,12 +194,10 @@ class InteractiveCLI:
                                     response_content += chunk_res
                                 print()
 
-                            # Save a simplified representation in history to save context tokens
                             self.messages.append({"role": "user", "content": f"Explain the file {path_arg}"})
                             self.messages.append({"role": "assistant", "content": response_content})
                             print()
 
-                            # Auto-save history
                             self.memory.save(self.messages)
                         except Exception as e:
                             print(f"{Fore.RED}Failed to explain file: {e}")
@@ -205,7 +207,6 @@ class InteractiveCLI:
                             explorer = RepositoryExplorer()
                             tree = explorer.build_tree()
 
-                            # Try to load README
                             readme_content = ""
                             try:
                                 readme_path = explorer.root_path / "README.md"
@@ -247,12 +248,10 @@ class InteractiveCLI:
 
                             for f in files:
                                 name = f.name.lower()
-                                # Common file entry names
                                 if name in ["main.py", "app.py", "index.js", "index.ts", "server.js", "main.go"]:
                                     detected.append(f)
                                     continue
 
-                                # Python files with standard __main__
                                 if f.suffix == ".py":
                                     try:
                                         content = self.file_reader.read_file(f)
@@ -272,6 +271,76 @@ class InteractiveCLI:
                             print()
                         except Exception as e:
                             print(f"{Fore.RED}Failed to scan for entry points: {e}")
+                        continue
+                    elif cmd == "/find":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a search term. Usage: /find <query>")
+                            continue
+                        try:
+                            searcher = CodeSearcher()
+                            matches = searcher.search_text(path_arg, is_regex=False)
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}Found {len(matches)} matches for keyword: '{path_arg}'")
+                            for m in matches:
+                                print(f"  {Fore.CYAN}{m['file']}:{m['line']} {Fore.WHITE}│ {m['content']}")
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Search failed: {e}")
+                        continue
+                    elif cmd == "/grep":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a regular expression pattern. Usage: /grep <pattern>")
+                            continue
+                        try:
+                            searcher = CodeSearcher()
+                            matches = searcher.search_text(path_arg, is_regex=True)
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}Found {len(matches)} matches for regex pattern: '{path_arg}'")
+                            for m in matches:
+                                print(f"  {Fore.CYAN}{m['file']}:{m['line']} {Fore.WHITE}│ {m['content']}")
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Regex search failed: {e}")
+                        continue
+                    elif cmd == "/todo":
+                        try:
+                            searcher = CodeSearcher()
+                            matches = searcher.find_todos()
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}Found {len(matches)} TODOs/FIXMEs/HACKs:")
+                            for m in matches:
+                                print(f"  {Fore.CYAN}{m['file']}:{m['line']} {Fore.WHITE}│ {m['content']}")
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Failed to search for TODOs: {e}")
+                        continue
+                    elif cmd == "/symbols":
+                        try:
+                            searcher = CodeSearcher()
+                            target = None if path_arg == "." else path_arg
+                            symbols = searcher.find_symbols(target)
+
+                            title = f"AST Symbols in file: {path_arg}" if target else "All AST Symbols in Repository"
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}{title} (Found {len(symbols)}):")
+
+                            for s in symbols:
+                                prefix = f"{s['file']}:" if not target else ""
+                                type_color = Fore.YELLOW if s['type'] == 'class' else Fore.CYAN
+                                print(f"  {Fore.MAGENTA}{prefix}{s['line']:<4} {type_color}{s['type']:<8} {Fore.WHITE}{s['name']}")
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Failed to fetch symbols: {e}")
+                        continue
+                    elif cmd == "/bugs":
+                        try:
+                            searcher = CodeSearcher()
+                            bugs = searcher.find_bugs()
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}Static Analysis Bug Audit (Found {len(bugs)} issues):")
+                            if bugs:
+                                for b in bugs:
+                                    print(f"  {Fore.RED}{b['file']}:{b['line']} {Fore.YELLOW}[{b['type']}] {Fore.WHITE}{b['message']}")
+                            else:
+                                print(f"  {Fore.GREEN}No bugs detected!")
+                            print()
+                        except Exception as e:
+                            print(f"{Fore.RED}Bug scan failed: {e}")
                         continue
                     else:
                         print(f"{Fore.RED}Unknown command: {user_input}. Type '/help' for options.")
