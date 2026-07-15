@@ -66,6 +66,7 @@ class InteractiveCLI:
         print(f"  {Fore.CYAN}/todo{Fore.RESET}               - List all TODO, FIXME, HACK, and BUG comments")
         print(f"  {Fore.CYAN}/symbols [file]{Fore.RESET}     - Extract classes and functions in Python files")
         print(f"  {Fore.CYAN}/bugs{Fore.RESET}               - Audit Python AST for empty catches or unsafe evals")
+        print(f"  {Fore.CYAN}/refactor{Fore.RESET}           - Interactively apply refactoring edits to multiple files")
         print(f"  {Fore.CYAN}/replace <file>{Fore.RESET}     - Interactively replace a block of code in a file")
         print(f"  {Fore.CYAN}/diff <file>{Fore.RESET}        - Show the session changes made to a file")
         print(f"  {Fore.CYAN}/undo <file>{Fore.RESET}        - Roll back session changes made to a file")
@@ -379,6 +380,72 @@ class InteractiveCLI:
                             print()
                         except Exception as e:
                             print(f"{Fore.RED}Bug scan failed: {e}")
+                        continue
+                    elif cmd == "/refactor":
+                        try:
+                            from refactoring import RefactoringTransaction
+                            transaction = RefactoringTransaction()
+
+                            print(f"\n{Fore.YELLOW}{Style.BRIGHT}⚙ Starting Multi-File Refactoring Wizard")
+
+                            while True:
+                                file_arg = input(f"{Fore.CYAN}Enter target file path (relative to root): ").strip()
+                                if not file_arg:
+                                    print(f"{Fore.RED}File path cannot be empty.")
+                                    continue
+
+                                file_path = Path(file_arg).resolve()
+                                if not file_path.exists():
+                                    print(f"{Fore.RED}File not found: {file_arg}")
+                                    continue
+
+                                print(f"\n{Fore.CYAN}--- Search Block for {file_path.name} ---")
+                                search_block = self.get_multiline_input("Enter search block")
+
+                                print(f"\n{Fore.CYAN}--- Replacement Block for {file_path.name} ---")
+                                replace_block = self.get_multiline_input("Enter replacement block")
+
+                                transaction.add_edit(file_arg, search_block, replace_block)
+
+                                add_more = input(f"\n{Fore.YELLOW}Add another edit block to this transaction? (y/N): ").strip().lower()
+                                if add_more not in ["y", "yes"]:
+                                    break
+
+                            validate_flag = input(f"\n{Fore.YELLOW}Perform AST code validation checks? (Y/n): ").strip().lower()
+                            validate = validate_flag not in ["n", "no"]
+
+                            print(f"\n{Fore.YELLOW}Evaluating refactoring dry-run in-memory...")
+                            result = transaction.dry_run(validate=validate)
+
+                            diffs = result["diffs"]
+                            if not diffs:
+                                print(f"{Fore.GREEN}No edits enqueued or no modifications detected.")
+                                continue
+
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}=== Proposed Multi-File Changes Diff ===")
+                            for path_str, diff_str in diffs.items():
+                                print(f"\n{Fore.CYAN}{Style.BRIGHT}File: {Path(path_str).name}")
+                                print(f"{Fore.CYAN}{Style.BRIGHT}----------------------------------------")
+                                for line in diff_str.splitlines():
+                                    if line.startswith("+") and not line.startswith("+++"):
+                                        print(f"{Fore.GREEN}{line}")
+                                    elif line.startswith("-") and not line.startswith("---"):
+                                        print(f"{Fore.RED}{line}")
+                                    elif line.startswith("@@"):
+                                        print(f"{Fore.CYAN}{line}")
+                                    else:
+                                        print(f"{Fore.WHITE}{line}")
+                                print(f"{Fore.CYAN}{Style.BRIGHT}----------------------------------------")
+                            print(f"{Fore.GREEN}{Style.BRIGHT}========================================\n")
+
+                            confirm = input(f"{Fore.YELLOW}Apply all changes to disk atomically? (y/N): ").strip().lower()
+                            if confirm in ["y", "yes"]:
+                                transaction.commit(result["proposed_contents"])
+                                print(f"{Fore.GREEN}Transaction committed successfully. All changes written to disk.")
+                            else:
+                                print(f"{Fore.YELLOW}Refactoring transaction aborted. No files were modified.")
+                        except Exception as e:
+                            print(f"{Fore.RED}Refactoring transaction failed: {e}")
                         continue
                     elif cmd == "/replace":
                         if path_arg == "." or not path_arg:

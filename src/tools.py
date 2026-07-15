@@ -8,6 +8,7 @@ from repository import RepositoryExplorer
 from search import CodeSearcher
 from executor import CommandRunner
 from git_manager import GitManager
+from refactoring import RefactoringTransaction
 
 class ToolRegistry:
     """Registry that houses tool schemas and handles dispatch of tool invocations."""
@@ -331,3 +332,62 @@ tool_registry.register("git_commit", git_commit, GIT_COMMIT_SCHEMA)
 tool_registry.register("git_diff", git_diff, GIT_DIFF_SCHEMA)
 tool_registry.register("git_log", git_log, GIT_LOG_SCHEMA)
 tool_registry.register("recall_memory", recall_memory, RECALL_MEMORY_SCHEMA)
+
+# Refactoring tool implementation
+def apply_refactor(edits: List[Dict[str, str]], validate: bool = True) -> str:
+    """Applies search-and-replace changes to multiple files simultaneously in an atomic transaction."""
+    try:
+        transaction = RefactoringTransaction()
+        for edit in edits:
+            file_path = edit.get("file_path")
+            search_block = edit.get("search_block")
+            replace_block = edit.get("replace_block")
+            if not file_path or search_block is None or replace_block is None:
+                return "Error: Each edit must contain 'file_path', 'search_block', and 'replace_block'."
+            transaction.add_edit(file_path, search_block, replace_block)
+
+        result = transaction.execute(validate=validate)
+        modified_list = ", ".join(Path(p).name for p in result["modified_files"])
+        return f"Successfully applied refactoring to: {modified_list}"
+    except Exception as e:
+        return f"Refactoring transaction failed and rolled back: {e}"
+
+
+APPLY_REFACTOR_SCHEMA = {
+    "name": "apply_refactor",
+    "description": "Applies search-and-replace block changes across multiple files atomically. If validation checks fail, rolls back all changes.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "edits": {
+                "type": "array",
+                "description": "The list of edits to apply across files.",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "file_path": {
+                            "type": "string",
+                            "description": "The relative path to the file to modify."
+                        },
+                        "search_block": {
+                            "type": "string",
+                            "description": "The exact string block to search for."
+                        },
+                        "replace_block": {
+                            "type": "string",
+                            "description": "The replacement string block."
+                        }
+                    },
+                    "required": ["file_path", "search_block", "replace_block"]
+                }
+            },
+            "validate": {
+                "type": "boolean",
+                "description": "If True, runs AST syntax checks and verifies local module imports (defaults to True)."
+            }
+        },
+        "required": ["edits"]
+    }
+}
+
+tool_registry.register("apply_refactor", apply_refactor, APPLY_REFACTOR_SCHEMA)

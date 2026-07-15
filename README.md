@@ -119,7 +119,8 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/todo` - Scans all project files for `TODO`, `FIXME`, `HACK`, or `BUG` comments.
   - `/symbols [file]` - Uses AST parsing to list Python class and function definitions.
   - `/bugs` - Performs static analysis on Python files using AST traversal to flag empty `except` handlers or unsafe dynamic execution functions (`eval`/`exec`).
-- **File Editing**:
+- **File Editing & Refactoring**:
+  - `/refactor` - Runs the interactive Multi-File Refactoring Wizard, enqueuing edit blocks for multiple files, generating combined diffs, running AST/imports code validation, and committing changes atomically.
   - `/replace <file>` - Launches interactive search-and-replace prompts, displays a color-coded unified diff preview, and asks for confirmation before writing changes.
   - `/diff <file>` - Shows current modifications made to `file` in this session compared to its original backup.
   - `/undo <file>` - Rolls back session changes and restores `file` to its original backed-up state.
@@ -153,6 +154,7 @@ When typing normal messages (without slash commands) in the chat prompt, the age
 8. **`git_diff(file_path)`**: Returns unstaged diffs.
 9. **`git_log(limit)`**: Lists recent repository commits.
 10. **`recall_memory(query, limit)`**: Programmatically recall past conversation history or user preferences semantically.
+11. **`apply_refactor(edits, validate)`**: Applies search-and-replace block changes across multiple files atomically. If validation checks fail, rolls back all changes.
 
 ---
 
@@ -175,6 +177,15 @@ To protect the host environment during automated command execution, all commands
 - **Blocked Parameters**: Dangerous command flag patterns, such as root recursive deletions (`rm -rf /`), are identified and blocked immediately.
 
 Additionally, command execution prioritizes the local project virtual environment's bin folder (e.g. `venv/Scripts` or `venv/bin`) within the PATH, ensuring local developer CLI binaries execute cleanly.
+
+---
+
+## Multi-File Modification & AST Validation (Phase 12+)
+
+The multi-file modification subsystem manages coordinated edits across files atomically:
+1. **Refactoring Transactions (`RefactoringTransaction`)**: Edit actions (file path, search string, replace string) are queued and executed in-memory. Commit actions are atomic: targets are backed up beforehand, and any writing fault triggers a automatic restore pipeline to revert modified files to their original state.
+2. **AST Parser Syntax Checks (`CodeValidator`)**: Evaluates the modified file's syntax tree using `ast.parse()`, intercepting formatting errors before writes occur.
+3. **Workspace Imports Resolver**: Walks `Import` and `ImportFrom` AST blocks. Relative imports are resolved using file paths, while absolute imports are matched against local directories (`src/`, `.`) and python package indices, highlighting broken dependencies.
 
 ---
 

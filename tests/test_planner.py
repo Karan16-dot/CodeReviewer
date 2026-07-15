@@ -2,11 +2,16 @@ import pytest
 from unittest.mock import patch, MagicMock
 from cli import InteractiveCLI
 
+@patch("cli.MemoryIndex")
 @patch("cli.OpenAIClient")
-def test_plan_command_react_loop(mock_client_class):
+def test_plan_command_react_loop(mock_client_class, mock_memory_index_class):
     """Verify that /plan parses the goal, formats ReAct instructions, and executes tool calls recursively."""
     mock_client = MagicMock()
     mock_client_class.return_value = mock_client
+
+    mock_memory_index = MagicMock()
+    mock_memory_index_class.return_value = mock_memory_index
+    mock_memory_index.load_messages.return_value = []
 
     cli = InteractiveCLI()
     cli.client = mock_client
