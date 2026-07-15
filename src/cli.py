@@ -508,14 +508,101 @@ class InteractiveCLI:
                         continue
                     elif cmd == "/git-status":
                         try:
-                            from executor import CommandRunner
-                            print(f"\n{Fore.YELLOW}Running git status stream...\n")
-                            runner = CommandRunner()
-                            for line in runner.run_streaming("git status"):
-                                print(line, end="", flush=True)
-                            print()
+                            from git_manager import GitManager
+                            print(f"\n{Fore.YELLOW}{Style.BRIGHT}--- Git Repository Status ---")
+                            mgr = GitManager()
+                            status = mgr.get_status()
+
+                            has_changes = False
+                            for key in ["staged", "modified", "deleted", "untracked"]:
+                                files = status[key]
+                                if files:
+                                    has_changes = True
+                                    color = Fore.GREEN if key == "staged" else (Fore.RED if key in ["modified", "deleted"] else Fore.CYAN)
+                                    print(f"{color}{key.upper()}:")
+                                    for f in files:
+                                        print(f"  {f}")
+
+                            if not has_changes:
+                                print(f"{Fore.WHITE}Repository is clean (no changes).")
+                            print(f"{Fore.YELLOW}{Style.BRIGHT}-------------------------------\n")
                         except Exception as e:
                             print(f"{Fore.RED}Git status failed: {e}")
+                        continue
+                    elif cmd == "/git-commit":
+                        if path_arg == "." or not path_arg:
+                            print(f"{Fore.RED}Please provide a commit message. Usage: /git-commit <message>")
+                            continue
+                        try:
+                            from git_manager import GitManager
+                            mgr = GitManager()
+                            sha = mgr.commit(path_arg)
+                            print(f"{Fore.GREEN}Successfully committed changes. Hash: {Fore.WHITE}{sha[:7]}")
+                        except Exception as e:
+                            print(f"{Fore.RED}Commit failed: {e}")
+                        continue
+                    elif cmd == "/git-diff":
+                        try:
+                            from git_manager import GitManager
+                            mgr = GitManager()
+                            target_file = path_arg if (path_arg and path_arg != ".") else None
+                            diff = mgr.get_diff(target_file)
+                            if not diff:
+                                print(f"{Fore.YELLOW}No unstaged changes found.")
+                                continue
+
+                            print(f"\n{Fore.GREEN}{Style.BRIGHT}--- Git Unstaged Diff ---")
+                            for line in diff.splitlines():
+                                if line.startswith("+") and not line.startswith("+++"):
+                                    print(f"{Fore.GREEN}{line}")
+                                elif line.startswith("-") and not line.startswith("---"):
+                                    print(f"{Fore.RED}{line}")
+                                elif line.startswith("@@"):
+                                    print(f"{Fore.CYAN}{line}")
+                                else:
+                                    print(f"{Fore.WHITE}{line}")
+                            print(f"{Fore.GREEN}{Style.BRIGHT}--------------------------\n")
+                        except Exception as e:
+                            print(f"{Fore.RED}Diff failed: {e}")
+                        continue
+                    elif cmd == "/git-branch":
+                        try:
+                            from git_manager import GitManager
+                            mgr = GitManager()
+                            if path_arg and path_arg != ".":
+                                msg = mgr.create_branch(path_arg)
+                                print(f"{Fore.GREEN}{msg}")
+                            else:
+                                branches_info = mgr.get_branches()
+                                active = branches_info["active"]
+                                branches = branches_info["branches"]
+                                print(f"\n{Fore.YELLOW}{Style.BRIGHT}--- Local Git Branches ---")
+                                for b in branches:
+                                    if b == active:
+                                        print(f"  {Fore.GREEN}* {b} (active)")
+                                    else:
+                                        print(f"  {Fore.WHITE}  {b}")
+                                print(f"{Fore.YELLOW}{Style.BRIGHT}---------------------------\n")
+                        except Exception as e:
+                            print(f"{Fore.RED}Branch operation failed: {e}")
+                        continue
+                    elif cmd == "/git-log":
+                        try:
+                            limit = 5
+                            if path_arg and path_arg != ".":
+                                try:
+                                    limit = int(path_arg)
+                                except ValueError:
+                                    pass
+                            from git_manager import GitManager
+                            mgr = GitManager()
+                            logs = mgr.get_log(limit)
+                            print(f"\n{Fore.YELLOW}{Style.BRIGHT}--- Git Commit Log (Recent {len(logs)}) ---")
+                            for entry in logs:
+                                print(f"  {Fore.CYAN}{entry['hash']}{Fore.RESET} - {Fore.WHITE}{entry['message']}{Fore.RESET} ({entry['author']}, {entry['date']})")
+                            print(f"{Fore.YELLOW}{Style.BRIGHT}-----------------------------------------\n")
+                        except Exception as e:
+                            print(f"{Fore.RED}Log failed: {e}")
                         continue
                     else:
                         print(f"{Fore.RED}Unknown command: {user_input}. Type '/help' for options.")

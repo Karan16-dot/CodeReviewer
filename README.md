@@ -19,6 +19,7 @@ claude-code-agent/
 │   ├── cli.py          # Interactive console chat interface
 │   ├── editor.py       # Safe file modification manager
 │   ├── executor.py     # Safe shell command execution engine
+│   ├── git_manager.py  # Git repository interaction manager
 │   ├── memory.py       # Conversation memory storage
 │   ├── reader.py       # File reader and token counter
 │   ├── repository.py   # Repository filesystem walker
@@ -27,6 +28,7 @@ claude-code-agent/
 ├── tests/              # Pytest unit testing suite
 │   ├── test_editor.py  # Editor modification tests
 │   ├── test_executor.py # Command execution runner tests
+│   ├── test_git_manager.py # Git manager tests
 │   ├── test_main.py    # Main script tests
 │   ├── test_memory.py  # Memory manager tests
 │   ├── test_openai_client.py # OpenAI client tests
@@ -116,10 +118,15 @@ You can manage your session, view statistics, scan directory trees, and edit/exp
   - `/replace <file>` - Launches interactive search-and-replace prompts, displays a color-coded unified diff preview, and asks for confirmation before writing changes.
   - `/diff <file>` - Shows current modifications made to `file` in this session compared to its original backup.
   - `/undo <file>` - Rolls back session changes and restores `file` to its original backed-up state.
-- **Command Runner (Phase 8+)**:
+- **Command Runner**:
   - `/run <command>` - Runs a custom shell command in the workspace, streaming the stdout/stderr live to the terminal.
   - `/test` - Shortcut to execute the Pytest unit testing suite and stream outputs.
-  - `/git-status` - Shortcut to execute the `git status` command.
+- **Git Integration (Phase 9+)**:
+  - `/git-status` - Print repository file status (modified, staged, untracked, deleted) highlighted with colors.
+  - `/git-commit <message>` - Stages all current modifications and commits them to git.
+  - `/git-diff [file]` - Shows unified unstaged diff of files in the workspace.
+  - `/git-branch [name]` - Lists branches, highlighting the active branch, or creates a new branch named `name` and checks out.
+  - `/git-log [limit]` - Prints the recent commit log history.
 
 ---
 
@@ -132,10 +139,14 @@ When typing normal messages (without slash commands) in the chat prompt, the age
 3. **`search_files(query, is_regex)`**: Searches the project files for strings or patterns.
 4. **`list_directory(path)`**: Lists files and folders in a tree format.
 5. **`run_command(command)`**: Runs a shell command on the host securely, streaming results to the user (restricted by safety blocklists).
+6. **`git_status()`**: Returns current repository file status.
+7. **`git_commit(message)`**: Stages all modified files and commits them with the given message.
+8. **`git_diff(file_path)`**: Returns unstaged diffs.
+9. **`git_log(limit)`**: Lists recent repository commits.
 
 ---
 
-## Security Policies (Phase 8+)
+## Security Policies
 
 To protect the host environment during automated command execution, all commands processed by the agent (both via the `run_command` tool and `/run` CLI directive) pass through the `CommandRunner` sanitizer:
 - **Blocked Commands**: Destructive binaries are explicitly blocked from executing (includes `del`, `rmdir`, `mkfs`, `dd`, `shutdown`, `reboot`, `format`, `chown`, `chmod`). Attempting to run them raises a `SecurityError`.

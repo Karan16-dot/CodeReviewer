@@ -7,6 +7,7 @@ from editor import FileEditor
 from repository import RepositoryExplorer
 from search import CodeSearcher
 from executor import CommandRunner
+from git_manager import GitManager
 
 class ToolRegistry:
     """Registry that houses tool schemas and handles dispatch of tool invocations."""
@@ -174,6 +175,106 @@ RUN_COMMAND_SCHEMA = {
     }
 }
 
+# Git tool implementations
+def git_status() -> str:
+    """Returns the current repository status (tracked, untracked, modified, staged)."""
+    try:
+        mgr = GitManager()
+        status = mgr.get_status()
+        output = []
+        for key, files in status.items():
+            if files:
+                output.append(f"{key.upper()}:")
+                for f in files:
+                    output.append(f"  {f}")
+        return "\n".join(output) if output else "Repository is clean (no changes)."
+    except Exception as e:
+        return f"Error fetching git status: {e}"
+
+def git_commit(message: str) -> str:
+    """Stages all changes and commits them with the given message."""
+    try:
+        mgr = GitManager()
+        sha = mgr.commit(message)
+        return f"Successfully committed changes. Hash: {sha}"
+    except Exception as e:
+        return f"Error executing git commit: {e}"
+
+def git_diff(file_path: str = None) -> str:
+    """Returns the unstaged unified diff of the workspace (or a specific file)."""
+    try:
+        mgr = GitManager()
+        diff = mgr.get_diff(file_path)
+        return diff if diff else "No unstaged changes found."
+    except Exception as e:
+        return f"Error fetching git diff: {e}"
+
+def git_log(limit: int = 5) -> str:
+    """Returns recent commit log messages."""
+    try:
+        mgr = GitManager()
+        log = mgr.get_log(limit)
+        output = []
+        for entry in log:
+            output.append(f"[{entry['hash']}] {entry['date']} - {entry['author']}: {entry['message']}")
+        return "\n".join(output) if output else "No commit logs found."
+    except Exception as e:
+        return f"Error fetching git log: {e}"
+
+
+# Git Schemas
+GIT_STATUS_SCHEMA = {
+    "name": "git_status",
+    "description": "Returns the status of modified, untracked, staged, or deleted files in the git repository.",
+    "parameters": {
+        "type": "object",
+        "properties": {}
+    }
+}
+
+GIT_COMMIT_SCHEMA = {
+    "name": "git_commit",
+    "description": "Stages all modified/untracked files and commits them to git with the provided commit message.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "message": {
+                "type": "string",
+                "description": "The commit message describing the changes."
+            }
+        },
+        "required": ["message"]
+    }
+}
+
+GIT_DIFF_SCHEMA = {
+    "name": "git_diff",
+    "description": "Retrieves the unstaged unified diff of files in the workspace. Filters by file path if provided.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "file_path": {
+                "type": "string",
+                "description": "Optional file path relative to repository root to restrict the diff query to."
+            }
+        }
+    }
+}
+
+GIT_LOG_SCHEMA = {
+    "name": "git_log",
+    "description": "Retrieves recent commits from the git log showing hash, author, date, and messages.",
+    "parameters": {
+        "type": "object",
+        "properties": {
+            "limit": {
+                "type": "integer",
+                "description": "The max number of commit records to fetch (defaults to 5)."
+            }
+        }
+    }
+}
+
 # Initialize and populate the global registry
 tool_registry = ToolRegistry()
 tool_registry.register("read_file", read_file, READ_FILE_SCHEMA)
@@ -181,3 +282,7 @@ tool_registry.register("write_file", write_file, WRITE_FILE_SCHEMA)
 tool_registry.register("search_files", search_files, SEARCH_FILES_SCHEMA)
 tool_registry.register("list_directory", list_directory, LIST_DIRECTORY_SCHEMA)
 tool_registry.register("run_command", run_command, RUN_COMMAND_SCHEMA)
+tool_registry.register("git_status", git_status, GIT_STATUS_SCHEMA)
+tool_registry.register("git_commit", git_commit, GIT_COMMIT_SCHEMA)
+tool_registry.register("git_diff", git_diff, GIT_DIFF_SCHEMA)
+tool_registry.register("git_log", git_log, GIT_LOG_SCHEMA)
