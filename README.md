@@ -1,6 +1,6 @@
 # Claude Code Agent
 
-Claude Code Agent is a robust, modular AI coding assistant built feature-by-feature. It is designed to run locally, interact with LLM APIs, explore workspace repositories, read and search files, edit code safely, run test suits, manage git versioning, and plan actions autonomously.
+Claude Code Agent is a robust, modular AI coding assistant built feature-by-feature. It is designed to run locally, interact with LLM APIs, explore workspace repositories, read and search files, edit code safely, run test suites, manage git versioning, and plan actions autonomously.
 
 ## Project Structure
 
@@ -12,7 +12,13 @@ claude-code-agent/
 ├── logs/               # Application runtime log files
 ├── prompts/            # Prompts templates (system/user)
 ├── src/                # Core Python package modules
+│   ├── llm/            # LLM API clients
+│   │   ├── client.py   # Base client interface
+│   │   └── openai_client.py # OpenAI SDK client implementation
+│   └── cli.py          # Interactive console chat interface
 ├── tests/              # Pytest unit testing suite
+│   ├── test_main.py    # Main script tests
+│   └── test_openai_client.py # OpenAI client tests
 ├── .env.example        # Environment variable configuration template
 ├── .gitignore          # Git exclusion rules
 ├── main.py             # CLI entry point
@@ -54,17 +60,21 @@ claude-code-agent/
    cp .env.example .env
    ```
 
+### Configuration (Phase 1+)
+
+To interact with OpenAI, configure your API key in the `.env` file in the project root:
+```env
+OPENAI_API_KEY=sk-proj-...
+```
+
 ### Running the CLI
 
-Run the entry point script:
+Start the interactive terminal session:
 ```bash
 python main.py
 ```
 
-Expected output:
-```text
-Claude Code Agent v0.1
-```
+Inside the CLI, you can chat with the assistant in real-time. Type `exit` or `quit` to end the session.
 
 ### Running Tests
 
